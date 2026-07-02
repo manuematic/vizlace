@@ -1339,6 +1339,12 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
       this.saving = false;
     }
   }
+  _syncElements() {
+    this.dashboard = {
+      ...this.dashboard,
+      elements: this.canvasEl.getElements()
+    };
+  }
   _onAddElement(e2) {
     const def = registry.get(e2.detail.type);
     if (!def) return;
@@ -1353,6 +1359,7 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
       config: { ...def.defaultConfig }
     };
     this.canvasEl.addElement(newEl);
+    this._syncElements();
   }
   _onElementSelected(e2) {
     this.selectedElement = e2.detail;
@@ -1360,10 +1367,18 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
   _onElementChange(e2) {
     this.canvasEl.updateSelectedElement(e2.detail);
     this.selectedElement = e2.detail;
+    this._syncElements();
   }
   _onElementDelete(e2) {
     this.canvasEl.deleteElement(e2.detail);
     this.selectedElement = null;
+    this._syncElements();
+  }
+  _onElementMoved() {
+    this._syncElements();
+  }
+  _onElementResized() {
+    this._syncElements();
   }
   _onTitleChange(e2) {
     this.dashboard = {
@@ -1405,6 +1420,8 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
         @element-selected=${this._onElementSelected}
         @element-change=${this._onElementChange}
         @element-delete=${this._onElementDelete}
+        @element-moved=${this._onElementMoved}
+        @element-resized=${this._onElementResized}
       >
         <vizlace-editor-toolbar></vizlace-editor-toolbar>
         <vizlace-editor-canvas

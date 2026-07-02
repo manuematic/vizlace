@@ -96,6 +96,13 @@ export class VizlaceEditor extends LitElement {
     }
   }
 
+  private _syncElements() {
+    this.dashboard = {
+      ...this.dashboard,
+      elements: this.canvasEl.getElements(),
+    };
+  }
+
   private _onAddElement(e: CustomEvent<{ type: string }>) {
     const def = registry.get(e.detail.type);
     if (!def) return;
@@ -110,6 +117,7 @@ export class VizlaceEditor extends LitElement {
       config: { ...def.defaultConfig },
     };
     this.canvasEl.addElement(newEl);
+    this._syncElements();
   }
 
   private _onElementSelected(e: CustomEvent<ElementConfig | null>) {
@@ -119,11 +127,21 @@ export class VizlaceEditor extends LitElement {
   private _onElementChange(e: CustomEvent<ElementConfig>) {
     this.canvasEl.updateSelectedElement(e.detail);
     this.selectedElement = e.detail;
+    this._syncElements();
   }
 
   private _onElementDelete(e: CustomEvent<string>) {
     this.canvasEl.deleteElement(e.detail);
     this.selectedElement = null;
+    this._syncElements();
+  }
+
+  private _onElementMoved() {
+    this._syncElements();
+  }
+
+  private _onElementResized() {
+    this._syncElements();
   }
 
   private _onTitleChange(e: Event) {
@@ -169,6 +187,8 @@ export class VizlaceEditor extends LitElement {
         @element-selected=${this._onElementSelected}
         @element-change=${this._onElementChange}
         @element-delete=${this._onElementDelete}
+        @element-moved=${this._onElementMoved}
+        @element-resized=${this._onElementResized}
       >
         <vizlace-editor-toolbar></vizlace-editor-toolbar>
         <vizlace-editor-canvas
