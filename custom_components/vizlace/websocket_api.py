@@ -38,7 +38,7 @@ async def handle_dashboards_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "vizlace/dashboard/get",
-        vol.Required("id"): str,
+        vol.Required("dashboard_id"): str,
     }
 )
 @websocket_api.async_response
@@ -48,7 +48,7 @@ async def handle_dashboard_get(
     msg: dict[str, Any],
 ) -> None:
     storage: VizlaceStorage = hass.data[DOMAIN]["storage"]
-    dashboard = await storage.async_get_dashboard(msg["id"])
+    dashboard = await storage.async_get_dashboard(msg["dashboard_id"])
     if dashboard is None:
         connection.send_error(msg["id"], "not_found", "Dashboard not found")
         return
@@ -75,7 +75,7 @@ async def handle_dashboard_save(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "vizlace/dashboard/delete",
-        vol.Required("id"): str,
+        vol.Required("dashboard_id"): str,
     }
 )
 @websocket_api.async_response
@@ -85,11 +85,11 @@ async def handle_dashboard_delete(
     msg: dict[str, Any],
 ) -> None:
     storage: VizlaceStorage = hass.data[DOMAIN]["storage"]
-    deleted = await storage.async_delete_dashboard(msg["id"])
+    deleted = await storage.async_delete_dashboard(msg["dashboard_id"])
     if not deleted:
         connection.send_error(msg["id"], "not_found", "Dashboard not found")
         return
-    connection.send_result(msg["id"], {"id": msg["id"]})
+    connection.send_result(msg["id"], {"id": msg["dashboard_id"]})
 
 
 @websocket_api.websocket_command(

@@ -616,7 +616,10 @@ async function wsDashboardsList(hass) {
   return hass.callWS({ type: "vizlace/dashboards/list" });
 }
 async function wsDashboardGet(hass, id) {
-  return hass.callWS({ type: "vizlace/dashboard/get", id });
+  return hass.callWS({
+    type: "vizlace/dashboard/get",
+    dashboard_id: id
+  });
 }
 async function wsDashboardSave(hass, dashboard) {
   return hass.callWS({
@@ -625,7 +628,7 @@ async function wsDashboardSave(hass, dashboard) {
   });
 }
 async function wsDashboardDelete(hass, id) {
-  await hass.callWS({ type: "vizlace/dashboard/delete", id });
+  await hass.callWS({ type: "vizlace/dashboard/delete", dashboard_id: id });
 }
 class ElementRegistry {
   constructor() {
