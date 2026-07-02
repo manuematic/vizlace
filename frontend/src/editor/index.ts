@@ -197,6 +197,7 @@ export class VizlaceEditor extends LitElement {
         ></vizlace-editor-canvas>
         <vizlace-editor-inspector
           .element=${this.selectedElement}
+          .hass=${this.hass}
         ></vizlace-editor-inspector>
       </div>
     `;

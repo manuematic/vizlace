@@ -1,7 +1,8 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property } from "lit/decorators.js";
-import type { ElementConfig } from "../types";
+import type { ElementConfig, HomeAssistant } from "../types";
 import { registry } from "../elements/registry";
+import "./entity-picker";
 
 export class VizlaceEditorInspector extends LitElement {
   static styles = css`
@@ -84,6 +85,7 @@ export class VizlaceEditorInspector extends LitElement {
   `;
 
   @property({ attribute: false }) element: ElementConfig | null = null;
+  @property({ attribute: false }) hass!: HomeAssistant;
 
   private _patch(patch: Partial<ElementConfig>) {
     if (!this.element) return;
@@ -162,15 +164,12 @@ export class VizlaceEditorInspector extends LitElement {
       <!-- Entity -->
       <div class="field-group">
         <label>Entity ID</label>
-        <input
-          type="text"
-          placeholder="e.g. sensor.temperature"
+        <vizlace-entity-picker
+          .hass=${this.hass}
           .value=${el.entity_id ?? ""}
-          @change=${(e: Event) =>
-            this._patch({
-              entity_id: (e.target as HTMLInputElement).value.trim() || undefined,
-            })}
-        />
+          @value-changed=${(e: CustomEvent<{ value: string }>) =>
+            this._patch({ entity_id: e.detail.value.trim() || undefined })}
+        ></vizlace-entity-picker>
       </div>
 
       ${def

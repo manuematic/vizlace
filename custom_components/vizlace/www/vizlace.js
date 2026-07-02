@@ -701,13 +701,13 @@ const n2 = "important", i3 = " !" + n2, o = e(class extends i$1 {
     return E;
   }
 });
-var __defProp$4 = Object.defineProperty;
-var __decorateClass$4 = (decorators, target, key, kind) => {
+var __defProp$5 = Object.defineProperty;
+var __decorateClass$5 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
     if (decorator = decorators[i4])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$4(target, key, result);
+  if (result) __defProp$5(target, key, result);
   return result;
 };
 const GRID = 10;
@@ -969,13 +969,13 @@ _VizlaceEditorCanvas.styles = i$5`
     .handle.w  { top: calc(50% - 5px); left: -5px; cursor: w-resize; }
   `;
 let VizlaceEditorCanvas = _VizlaceEditorCanvas;
-__decorateClass$4([
+__decorateClass$5([
   n$1({ attribute: false })
 ], VizlaceEditorCanvas.prototype, "dashboard");
-__decorateClass$4([
+__decorateClass$5([
   n$1({ attribute: false })
 ], VizlaceEditorCanvas.prototype, "hass");
-__decorateClass$4([
+__decorateClass$5([
   r()
 ], VizlaceEditorCanvas.prototype, "selectedId");
 customElements.define("vizlace-editor-canvas", VizlaceEditorCanvas);
@@ -1052,6 +1052,196 @@ _VizlaceEditorToolbar.styles = i$5`
   `;
 let VizlaceEditorToolbar = _VizlaceEditorToolbar;
 customElements.define("vizlace-editor-toolbar", VizlaceEditorToolbar);
+var __defProp$4 = Object.defineProperty;
+var __decorateClass$4 = (decorators, target, key, kind) => {
+  var result = void 0;
+  for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
+    if (decorator = decorators[i4])
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$4(target, key, result);
+  return result;
+};
+const _VizlaceEntityPicker = class _VizlaceEntityPicker extends i$2 {
+  constructor() {
+    super(...arguments);
+    this.value = "";
+    this.open = false;
+    this.queryText = "";
+    this.activeIndex = -1;
+  }
+  get _matches() {
+    var _a2;
+    const q = this.queryText.trim().toLowerCase();
+    const ids = Object.keys(((_a2 = this.hass) == null ? void 0 : _a2.states) ?? {});
+    return ids.map((id) => {
+      var _a3, _b;
+      const friendly = String(
+        ((_b = (_a3 = this.hass.states[id]) == null ? void 0 : _a3.attributes) == null ? void 0 : _b.friendly_name) ?? ""
+      );
+      const haystack = `${id} ${friendly}`.toLowerCase();
+      return { id, idx: haystack.indexOf(q) };
+    }).filter((m2) => q === "" || m2.idx !== -1).sort((a2, b2) => a2.idx - b2.idx || a2.id.localeCompare(b2.id)).slice(0, 50).map((m2) => m2.id);
+  }
+  _openDropdown() {
+    this.queryText = this.value;
+    this.open = true;
+    this.activeIndex = -1;
+  }
+  _onInput(e2) {
+    this.queryText = e2.target.value;
+    this.open = true;
+    this.activeIndex = -1;
+  }
+  _select(id) {
+    this.value = id;
+    this.queryText = id;
+    this.open = false;
+    this.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: id },
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+  _onBlur() {
+    setTimeout(() => {
+      this.open = false;
+      this._select(this.queryText.trim());
+    }, 150);
+  }
+  _onKeydown(e2) {
+    const matches = this._matches;
+    if (e2.key === "ArrowDown") {
+      e2.preventDefault();
+      this.open = true;
+      this.activeIndex = Math.min(this.activeIndex + 1, matches.length - 1);
+    } else if (e2.key === "ArrowUp") {
+      e2.preventDefault();
+      this.activeIndex = Math.max(this.activeIndex - 1, 0);
+    } else if (e2.key === "Enter") {
+      e2.preventDefault();
+      if (this.activeIndex >= 0 && matches[this.activeIndex]) {
+        this._select(matches[this.activeIndex]);
+      } else {
+        this._select(this.queryText.trim());
+      }
+      this.inputEl.blur();
+    } else if (e2.key === "Escape") {
+      this.open = false;
+      this.inputEl.blur();
+    }
+  }
+  render() {
+    const matches = this.open ? this._matches : [];
+    return b`
+      <input
+        type="text"
+        placeholder="e.g. sensor.temperature"
+        .value=${this.open ? this.queryText : this.value}
+        @focus=${this._openDropdown}
+        @input=${this._onInput}
+        @blur=${this._onBlur}
+        @keydown=${this._onKeydown}
+      />
+      ${this.open ? b`
+            <div class="dropdown">
+              ${matches.length === 0 ? b`<div class="empty">No matching entities</div>` : matches.map(
+      (id, i4) => {
+        var _a2, _b;
+        return b`
+                      <div
+                        class="option ${i4 === this.activeIndex ? "active" : ""}"
+                        @mousedown=${(e2) => {
+          e2.preventDefault();
+          this._select(id);
+        }}
+                      >
+                        ${((_b = (_a2 = this.hass.states[id]) == null ? void 0 : _a2.attributes) == null ? void 0 : _b.friendly_name) ?? id}
+                        <span class="eid">${id}</span>
+                      </div>
+                    `;
+      }
+    )}
+            </div>
+          ` : A}
+    `;
+  }
+};
+_VizlaceEntityPicker.styles = i$5`
+    :host {
+      display: block;
+      position: relative;
+    }
+    input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: var(--primary-text-color, #fff);
+      padding: 5px 7px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    .dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      max-height: 220px;
+      overflow-y: auto;
+      background: var(--card-background-color, #1c1c1e);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      margin-top: 2px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .option {
+      padding: 6px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .option .eid {
+      display: block;
+      color: var(--secondary-text-color, #aaa);
+      font-size: 10px;
+    }
+    .option:hover,
+    .option.active {
+      background: var(--primary-color, #03a9f4);
+      color: #fff;
+    }
+    .option:hover .eid,
+    .option.active .eid {
+      color: rgba(255, 255, 255, 0.8);
+    }
+    .empty {
+      padding: 8px;
+      font-size: 12px;
+      color: var(--secondary-text-color, #aaa);
+    }
+  `;
+let VizlaceEntityPicker = _VizlaceEntityPicker;
+__decorateClass$4([
+  n$1({ attribute: false })
+], VizlaceEntityPicker.prototype, "hass");
+__decorateClass$4([
+  n$1()
+], VizlaceEntityPicker.prototype, "value");
+__decorateClass$4([
+  r()
+], VizlaceEntityPicker.prototype, "open");
+__decorateClass$4([
+  r()
+], VizlaceEntityPicker.prototype, "queryText");
+__decorateClass$4([
+  r()
+], VizlaceEntityPicker.prototype, "activeIndex");
+__decorateClass$4([
+  e$1("input")
+], VizlaceEntityPicker.prototype, "inputEl");
+customElements.define("vizlace-entity-picker", VizlaceEntityPicker);
 var __defProp$3 = Object.defineProperty;
 var __decorateClass$3 = (decorators, target, key, kind) => {
   var result = void 0;
@@ -1135,14 +1325,11 @@ const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
       <!-- Entity -->
       <div class="field-group">
         <label>Entity ID</label>
-        <input
-          type="text"
-          placeholder="e.g. sensor.temperature"
+        <vizlace-entity-picker
+          .hass=${this.hass}
           .value=${el.entity_id ?? ""}
-          @change=${(e2) => this._patch({
-      entity_id: e2.target.value.trim() || void 0
-    })}
-        />
+          @value-changed=${(e2) => this._patch({ entity_id: e2.detail.value.trim() || void 0 })}
+        ></vizlace-entity-picker>
       </div>
 
       ${def ? b`
@@ -1307,6 +1494,9 @@ let VizlaceEditorInspector = _VizlaceEditorInspector;
 __decorateClass$3([
   n$1({ attribute: false })
 ], VizlaceEditorInspector.prototype, "element");
+__decorateClass$3([
+  n$1({ attribute: false })
+], VizlaceEditorInspector.prototype, "hass");
 customElements.define("vizlace-editor-inspector", VizlaceEditorInspector);
 var __defProp$2 = Object.defineProperty;
 var __decorateClass$2 = (decorators, target, key, kind) => {
@@ -1433,6 +1623,7 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
         ></vizlace-editor-canvas>
         <vizlace-editor-inspector
           .element=${this.selectedElement}
+          .hass=${this.hass}
         ></vizlace-editor-inspector>
       </div>
     `;
