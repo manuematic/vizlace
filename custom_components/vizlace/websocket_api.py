@@ -14,21 +14,11 @@ from .storage import VizlaceStorage
 
 def async_register_commands(hass: HomeAssistant, storage: VizlaceStorage) -> None:
     """Register all Vizlace WebSocket commands."""
-    hass.components.websocket_api.async_register_command(
-        hass, handle_dashboards_list
-    )
-    hass.components.websocket_api.async_register_command(
-        hass, handle_dashboard_get
-    )
-    hass.components.websocket_api.async_register_command(
-        hass, handle_dashboard_save
-    )
-    hass.components.websocket_api.async_register_command(
-        hass, handle_dashboard_delete
-    )
-    hass.components.websocket_api.async_register_command(
-        hass, handle_call_service
-    )
+    websocket_api.async_register_command(hass, handle_dashboards_list)
+    websocket_api.async_register_command(hass, handle_dashboard_get)
+    websocket_api.async_register_command(hass, handle_dashboard_save)
+    websocket_api.async_register_command(hass, handle_dashboard_delete)
+    websocket_api.async_register_command(hass, handle_call_service)
     # Store storage instance in hass.data for handlers to access
     hass.data.setdefault(DOMAIN, {})["storage"] = storage
 
