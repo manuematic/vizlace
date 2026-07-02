@@ -13,7 +13,10 @@ export async function wsDashboardGet(
   hass: HomeAssistant,
   id: string
 ): Promise<{ dashboard: Dashboard }> {
-  return hass.callWS({ type: "vizlace/dashboard/get", id }) as Promise<{
+  return hass.callWS({
+    type: "vizlace/dashboard/get",
+    dashboard_id: id,
+  }) as Promise<{
     dashboard: Dashboard;
   }>;
 }
@@ -32,5 +35,5 @@ export async function wsDashboardDelete(
   hass: HomeAssistant,
   id: string
 ): Promise<void> {
-  await hass.callWS({ type: "vizlace/dashboard/delete", id });
+  await hass.callWS({ type: "vizlace/dashboard/delete", dashboard_id: id });
 }
