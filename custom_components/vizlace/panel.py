@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 from homeassistant.components.frontend import async_register_built_in_panel
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
 
@@ -11,10 +12,8 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     """Register the Vizlace custom panel."""
     www_path = os.path.join(os.path.dirname(__file__), "www")
 
-    hass.http.register_static_path(
-        "/vizlace_static",
-        www_path,
-        cache_headers=False,
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig("/vizlace_static", www_path, cache_headers=False)]
     )
 
     async_register_built_in_panel(
