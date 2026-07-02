@@ -1,0 +1,3 @@
+DOMAIN = "vizlace"
+STORAGE_VERSION = 1
+STORAGE_KEY_PREFIX = "vizlace"
