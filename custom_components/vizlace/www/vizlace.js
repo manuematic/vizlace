@@ -710,8 +710,10 @@ var __decorateClass$5 = (decorators, target, key, kind) => {
   if (result) __defProp$5(target, key, result);
   return result;
 };
-const GRID = 10;
-const snap = (v2) => Math.round(v2 / GRID) * GRID;
+const DEFAULT_GRID = 10;
+const DEFAULT_CANVAS_WIDTH = 1600;
+const DEFAULT_CANVAS_HEIGHT = 900;
+const RESOLUTION_MARGIN = 200;
 const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
   constructor() {
     super(...arguments);
@@ -723,8 +725,8 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
         const dx = e2.clientX - this.drag.startX;
         const dy = e2.clientY - this.drag.startY;
         this._updateElement(this.drag.elementId, {
-          x: snap(Math.max(0, this.drag.origX + dx)),
-          y: snap(Math.max(0, this.drag.origY + dy))
+          x: this._snap(Math.max(0, this.drag.origX + dx)),
+          y: this._snap(Math.max(0, this.drag.origY + dy))
         });
       } else if (this.resize) {
         const r2 = this.resize;
@@ -732,20 +734,20 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
         const dy = e2.clientY - r2.startY;
         const patch = {};
         if (r2.handle.includes("e")) {
-          patch.width = snap(Math.max(40, r2.origW + dx));
+          patch.width = this._snap(Math.max(40, r2.origW + dx));
         }
         if (r2.handle.includes("s")) {
-          patch.height = snap(Math.max(30, r2.origH + dy));
+          patch.height = this._snap(Math.max(30, r2.origH + dy));
         }
         if (r2.handle.includes("w")) {
-          const nw = snap(Math.max(40, r2.origW - dx));
+          const nw = this._snap(Math.max(40, r2.origW - dx));
           patch.width = nw;
-          patch.x = snap(r2.origX + r2.origW - nw);
+          patch.x = this._snap(r2.origX + r2.origW - nw);
         }
         if (r2.handle.includes("n")) {
-          const nh = snap(Math.max(30, r2.origH - dy));
+          const nh = this._snap(Math.max(30, r2.origH - dy));
           patch.height = nh;
-          patch.y = snap(r2.origY + r2.origH - nh);
+          patch.y = this._snap(r2.origY + r2.origH - nh);
         }
         this._updateElement(r2.elementId, patch);
       }
@@ -773,6 +775,11 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
       this.resize = null;
       window.removeEventListener("pointermove", this._onPointerMove);
     };
+  }
+  _snap(v2) {
+    if (this.dashboard.snapToGrid === false) return Math.round(v2);
+    const grid = this.dashboard.gridSize || DEFAULT_GRID;
+    return Math.round(v2 / grid) * grid;
   }
   _onPointerDown(e2, el) {
     if (e2.target.classList.contains("handle")) return;
@@ -844,8 +851,38 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
   }
   render() {
     if (!this.dashboard) return A;
+    const gridSize = this.dashboard.gridSize || DEFAULT_GRID;
+    const screenW = this.dashboard.screenWidth;
+    const screenH = this.dashboard.screenHeight;
+    const canvasWidth = Math.max(
+      DEFAULT_CANVAS_WIDTH,
+      screenW ? screenW + RESOLUTION_MARGIN : 0
+    );
+    const canvasHeight = Math.max(
+      DEFAULT_CANVAS_HEIGHT,
+      screenH ? screenH + RESOLUTION_MARGIN : 0
+    );
     return b`
-      <div class="canvas" @click=${this._onCanvasClick}>
+      <div
+        class="canvas"
+        style=${o({
+      width: `${canvasWidth}px`,
+      minHeight: `${canvasHeight}px`,
+      backgroundSize: `${gridSize}px ${gridSize}px`
+    })}
+        @click=${this._onCanvasClick}
+      >
+        ${screenW && screenH ? b`
+              <div
+                class="resolution-guide"
+                style=${o({
+      width: `${screenW}px`,
+      height: `${screenH}px`
+    })}
+              >
+                <span class="resolution-label">${screenW} × ${screenH}</span>
+              </div>
+            ` : A}
         ${this.dashboard.elements.map((el) => {
       var _a2;
       const def = registry.get(el.type);
@@ -920,14 +957,31 @@ _VizlaceEditorCanvas.styles = i$5`
     }
     .canvas {
       position: relative;
-      width: 1600px;
-      min-height: 900px;
       background-image: radial-gradient(
         circle,
         rgba(255, 255, 255, 0.07) 1px,
         transparent 1px
       );
-      background-size: 10px 10px;
+    }
+    .resolution-guide {
+      position: absolute;
+      left: 0;
+      top: 0;
+      box-sizing: border-box;
+      border: 2px dashed var(--primary-color, #03a9f4);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .resolution-label {
+      position: absolute;
+      top: -20px;
+      left: 0;
+      font-size: 11px;
+      color: var(--primary-color, #03a9f4);
+      background: rgba(0, 0, 0, 0.6);
+      padding: 1px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
     }
     .element-wrapper {
       position: absolute;
@@ -1270,9 +1324,85 @@ const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
     if (!this.element) return;
     this._patch({ config: { ...this.element.config, [key]: value } });
   }
+  _patchDashboard(patch) {
+    this.dispatchEvent(
+      new CustomEvent("dashboard-change", {
+        detail: patch,
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+  _renderDashboardSettings() {
+    const db = this.dashboard;
+    const gridSize = (db == null ? void 0 : db.gridSize) ?? 10;
+    const snapToGrid = (db == null ? void 0 : db.snapToGrid) !== false;
+    return b`
+      <h3>Canvas Settings</h3>
+      <div class="empty">Select an element to configure it.</div>
+
+      <hr class="separator" />
+
+      <div class="field-group">
+        <label>Grid size (px)</label>
+        <input
+          type="number"
+          min="2"
+          .value=${String(gridSize)}
+          @change=${(e2) => {
+      const v2 = Number(e2.target.value);
+      this._patchDashboard({ gridSize: v2 > 0 ? v2 : void 0 });
+    }}
+        />
+      </div>
+
+      <div class="field-group checkbox-row">
+        <input
+          type="checkbox"
+          id="snap-toggle"
+          .checked=${snapToGrid}
+          @change=${(e2) => this._patchDashboard({
+      snapToGrid: e2.target.checked
+    })}
+        />
+        <label for="snap-toggle">Snap elements to grid</label>
+      </div>
+
+      <hr class="separator" />
+
+      <label>Screen resolution guide</label>
+      <div class="hint">Shown as a dashed outline on the canvas.</div>
+      <div class="pos-grid">
+        <div class="field-group">
+          <label>Width (px)</label>
+          <input
+            type="number"
+            min="0"
+            .value=${String((db == null ? void 0 : db.screenWidth) ?? "")}
+            @change=${(e2) => {
+      const v2 = Number(e2.target.value);
+      this._patchDashboard({ screenWidth: v2 > 0 ? v2 : void 0 });
+    }}
+          />
+        </div>
+        <div class="field-group">
+          <label>Height (px)</label>
+          <input
+            type="number"
+            min="0"
+            .value=${String((db == null ? void 0 : db.screenHeight) ?? "")}
+            @change=${(e2) => {
+      const v2 = Number(e2.target.value);
+      this._patchDashboard({ screenHeight: v2 > 0 ? v2 : void 0 });
+    }}
+          />
+        </div>
+      </div>
+    `;
+  }
   render() {
     if (!this.element) {
-      return b`<div class="empty">Select an element to configure it.</div>`;
+      return this._renderDashboardSettings();
     }
     const el = this.element;
     const def = registry.get(el.type);
@@ -1487,7 +1617,22 @@ _VizlaceEditorInspector.styles = i$5`
       font-size: 13px;
       color: var(--secondary-text-color, #aaa);
       text-align: center;
-      margin-top: 40px;
+      margin-top: 8px;
+      margin-bottom: 16px;
+    }
+    .hint {
+      font-size: 11px;
+      color: var(--secondary-text-color, #aaa);
+      margin-top: -6px;
+      margin-bottom: 10px;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .checkbox-row label {
+      margin-bottom: 0;
     }
   `;
 let VizlaceEditorInspector = _VizlaceEditorInspector;
@@ -1497,6 +1642,9 @@ __decorateClass$3([
 __decorateClass$3([
   n$1({ attribute: false })
 ], VizlaceEditorInspector.prototype, "hass");
+__decorateClass$3([
+  n$1({ attribute: false })
+], VizlaceEditorInspector.prototype, "dashboard");
 customElements.define("vizlace-editor-inspector", VizlaceEditorInspector);
 var __defProp$2 = Object.defineProperty;
 var __decorateClass$2 = (decorators, target, key, kind) => {
@@ -1573,6 +1721,9 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
   _onElementResized() {
     this._syncElements();
   }
+  _onDashboardChange(e2) {
+    this.dashboard = { ...this.dashboard, ...e2.detail };
+  }
   _onTitleChange(e2) {
     this.dashboard = {
       ...this.dashboard,
@@ -1615,6 +1766,7 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
         @element-delete=${this._onElementDelete}
         @element-moved=${this._onElementMoved}
         @element-resized=${this._onElementResized}
+        @dashboard-change=${this._onDashboardChange}
       >
         <vizlace-editor-toolbar></vizlace-editor-toolbar>
         <vizlace-editor-canvas
@@ -1624,6 +1776,7 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
         <vizlace-editor-inspector
           .element=${this.selectedElement}
           .hass=${this.hass}
+          .dashboard=${this.dashboard}
         ></vizlace-editor-inspector>
       </div>
     `;

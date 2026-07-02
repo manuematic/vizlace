@@ -144,6 +144,10 @@ export class VizlaceEditor extends LitElement {
     this._syncElements();
   }
 
+  private _onDashboardChange(e: CustomEvent<Partial<Dashboard>>) {
+    this.dashboard = { ...this.dashboard, ...e.detail };
+  }
+
   private _onTitleChange(e: Event) {
     this.dashboard = {
       ...this.dashboard,
@@ -189,6 +193,7 @@ export class VizlaceEditor extends LitElement {
         @element-delete=${this._onElementDelete}
         @element-moved=${this._onElementMoved}
         @element-resized=${this._onElementResized}
+        @dashboard-change=${this._onDashboardChange}
       >
         <vizlace-editor-toolbar></vizlace-editor-toolbar>
         <vizlace-editor-canvas
@@ -198,6 +203,7 @@ export class VizlaceEditor extends LitElement {
         <vizlace-editor-inspector
           .element=${this.selectedElement}
           .hass=${this.hass}
+          .dashboard=${this.dashboard}
         ></vizlace-editor-inspector>
       </div>
     `;

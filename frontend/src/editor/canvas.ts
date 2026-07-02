@@ -34,8 +34,10 @@ interface ResizeState {
   origH: number;
 }
 
-const GRID = 10;
-const snap = (v: number) => Math.round(v / GRID) * GRID;
+const DEFAULT_GRID = 10;
+const DEFAULT_CANVAS_WIDTH = 1600;
+const DEFAULT_CANVAS_HEIGHT = 900;
+const RESOLUTION_MARGIN = 200;
 
 export class VizlaceEditorCanvas extends LitElement {
   static styles = css`
@@ -48,14 +50,31 @@ export class VizlaceEditorCanvas extends LitElement {
     }
     .canvas {
       position: relative;
-      width: 1600px;
-      min-height: 900px;
       background-image: radial-gradient(
         circle,
         rgba(255, 255, 255, 0.07) 1px,
         transparent 1px
       );
-      background-size: 10px 10px;
+    }
+    .resolution-guide {
+      position: absolute;
+      left: 0;
+      top: 0;
+      box-sizing: border-box;
+      border: 2px dashed var(--primary-color, #03a9f4);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .resolution-label {
+      position: absolute;
+      top: -20px;
+      left: 0;
+      font-size: 11px;
+      color: var(--primary-color, #03a9f4);
+      background: rgba(0, 0, 0, 0.6);
+      padding: 1px 6px;
+      border-radius: 3px;
+      white-space: nowrap;
     }
     .element-wrapper {
       position: absolute;
@@ -104,6 +123,12 @@ export class VizlaceEditorCanvas extends LitElement {
   private drag: DragState | null = null;
   private resize: ResizeState | null = null;
 
+  private _snap(v: number): number {
+    if (this.dashboard.snapToGrid === false) return Math.round(v);
+    const grid = this.dashboard.gridSize || DEFAULT_GRID;
+    return Math.round(v / grid) * grid;
+  }
+
   private _onPointerDown(e: PointerEvent, el: ElementConfig) {
     if ((e.target as HTMLElement).classList.contains("handle")) return;
     e.preventDefault();
@@ -148,8 +173,8 @@ export class VizlaceEditorCanvas extends LitElement {
       const dx = e.clientX - this.drag.startX;
       const dy = e.clientY - this.drag.startY;
       this._updateElement(this.drag.elementId, {
-        x: snap(Math.max(0, this.drag.origX + dx)),
-        y: snap(Math.max(0, this.drag.origY + dy)),
+        x: this._snap(Math.max(0, this.drag.origX + dx)),
+        y: this._snap(Math.max(0, this.drag.origY + dy)),
       });
     } else if (this.resize) {
       const r = this.resize;
@@ -158,20 +183,20 @@ export class VizlaceEditorCanvas extends LitElement {
       const patch: Partial<ElementConfig> = {};
 
       if (r.handle!.includes("e")) {
-        patch.width = snap(Math.max(40, r.origW + dx));
+        patch.width = this._snap(Math.max(40, r.origW + dx));
       }
       if (r.handle!.includes("s")) {
-        patch.height = snap(Math.max(30, r.origH + dy));
+        patch.height = this._snap(Math.max(30, r.origH + dy));
       }
       if (r.handle!.includes("w")) {
-        const nw = snap(Math.max(40, r.origW - dx));
+        const nw = this._snap(Math.max(40, r.origW - dx));
         patch.width = nw;
-        patch.x = snap(r.origX + r.origW - nw);
+        patch.x = this._snap(r.origX + r.origW - nw);
       }
       if (r.handle!.includes("n")) {
-        const nh = snap(Math.max(30, r.origH - dy));
+        const nh = this._snap(Math.max(30, r.origH - dy));
         patch.height = nh;
-        patch.y = snap(r.origY + r.origH - nh);
+        patch.y = this._snap(r.origY + r.origH - nh);
       }
       this._updateElement(r.elementId, patch);
     }
@@ -236,8 +261,41 @@ export class VizlaceEditorCanvas extends LitElement {
   render() {
     if (!this.dashboard) return nothing;
 
+    const gridSize = this.dashboard.gridSize || DEFAULT_GRID;
+    const screenW = this.dashboard.screenWidth;
+    const screenH = this.dashboard.screenHeight;
+    const canvasWidth = Math.max(
+      DEFAULT_CANVAS_WIDTH,
+      screenW ? screenW + RESOLUTION_MARGIN : 0
+    );
+    const canvasHeight = Math.max(
+      DEFAULT_CANVAS_HEIGHT,
+      screenH ? screenH + RESOLUTION_MARGIN : 0
+    );
+
     return html`
-      <div class="canvas" @click=${this._onCanvasClick}>
+      <div
+        class="canvas"
+        style=${styleMap({
+          width: `${canvasWidth}px`,
+          minHeight: `${canvasHeight}px`,
+          backgroundSize: `${gridSize}px ${gridSize}px`,
+        })}
+        @click=${this._onCanvasClick}
+      >
+        ${screenW && screenH
+          ? html`
+              <div
+                class="resolution-guide"
+                style=${styleMap({
+                  width: `${screenW}px`,
+                  height: `${screenH}px`,
+                })}
+              >
+                <span class="resolution-label">${screenW} × ${screenH}</span>
+              </div>
+            `
+          : nothing}
         ${this.dashboard.elements.map((el) => {
           const def = registry.get(el.type);
           const selected = el.id === this.selectedId;

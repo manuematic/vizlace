@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property } from "lit/decorators.js";
-import type { ElementConfig, HomeAssistant } from "../types";
+import type { Dashboard, ElementConfig, HomeAssistant } from "../types";
 import { registry } from "../elements/registry";
 import "./entity-picker";
 
@@ -80,12 +80,28 @@ export class VizlaceEditorInspector extends LitElement {
       font-size: 13px;
       color: var(--secondary-text-color, #aaa);
       text-align: center;
-      margin-top: 40px;
+      margin-top: 8px;
+      margin-bottom: 16px;
+    }
+    .hint {
+      font-size: 11px;
+      color: var(--secondary-text-color, #aaa);
+      margin-top: -6px;
+      margin-bottom: 10px;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .checkbox-row label {
+      margin-bottom: 0;
     }
   `;
 
   @property({ attribute: false }) element: ElementConfig | null = null;
   @property({ attribute: false }) hass!: HomeAssistant;
+  @property({ attribute: false }) dashboard!: Dashboard;
 
   private _patch(patch: Partial<ElementConfig>) {
     if (!this.element) return;
@@ -103,9 +119,89 @@ export class VizlaceEditorInspector extends LitElement {
     this._patch({ config: { ...this.element.config, [key]: value } });
   }
 
+  private _patchDashboard(patch: Partial<Dashboard>) {
+    this.dispatchEvent(
+      new CustomEvent("dashboard-change", {
+        detail: patch,
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private _renderDashboardSettings() {
+    const db = this.dashboard;
+    const gridSize = db?.gridSize ?? 10;
+    const snapToGrid = db?.snapToGrid !== false;
+
+    return html`
+      <h3>Canvas Settings</h3>
+      <div class="empty">Select an element to configure it.</div>
+
+      <hr class="separator" />
+
+      <div class="field-group">
+        <label>Grid size (px)</label>
+        <input
+          type="number"
+          min="2"
+          .value=${String(gridSize)}
+          @change=${(e: Event) => {
+            const v = Number((e.target as HTMLInputElement).value);
+            this._patchDashboard({ gridSize: v > 0 ? v : undefined });
+          }}
+        />
+      </div>
+
+      <div class="field-group checkbox-row">
+        <input
+          type="checkbox"
+          id="snap-toggle"
+          .checked=${snapToGrid}
+          @change=${(e: Event) =>
+            this._patchDashboard({
+              snapToGrid: (e.target as HTMLInputElement).checked,
+            })}
+        />
+        <label for="snap-toggle">Snap elements to grid</label>
+      </div>
+
+      <hr class="separator" />
+
+      <label>Screen resolution guide</label>
+      <div class="hint">Shown as a dashed outline on the canvas.</div>
+      <div class="pos-grid">
+        <div class="field-group">
+          <label>Width (px)</label>
+          <input
+            type="number"
+            min="0"
+            .value=${String(db?.screenWidth ?? "")}
+            @change=${(e: Event) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              this._patchDashboard({ screenWidth: v > 0 ? v : undefined });
+            }}
+          />
+        </div>
+        <div class="field-group">
+          <label>Height (px)</label>
+          <input
+            type="number"
+            min="0"
+            .value=${String(db?.screenHeight ?? "")}
+            @change=${(e: Event) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              this._patchDashboard({ screenHeight: v > 0 ? v : undefined });
+            }}
+          />
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     if (!this.element) {
-      return html`<div class="empty">Select an element to configure it.</div>`;
+      return this._renderDashboardSettings();
     }
 
     const el = this.element;

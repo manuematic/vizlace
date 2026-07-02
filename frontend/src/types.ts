@@ -19,6 +19,10 @@ export interface Dashboard {
   title: string;
   background: string;
   elements: ElementConfig[];
+  gridSize?: number;
+  snapToGrid?: boolean;
+  screenWidth?: number;
+  screenHeight?: number;
 }
 
 export interface ConfigField {

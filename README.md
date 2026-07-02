@@ -7,8 +7,15 @@ A free-placement visual dashboard for Home Assistant — similar to ioBroker's V
 - **Free-placement canvas** — drag elements to any position, resize with handles
 - **Live data** — elements update in real time from HA entity states
 - **Built-in elements**: Gauge, Text Display, Button, Color Field, Heating thermostat
+- **Searchable entity picker** — live filter by entity id or friendly name when linking an element
+- **Configurable grid** — adjust the snap grid spacing, or turn snapping off entirely
+- **Screen resolution guide** — enter a target screen size to see its bounds as an overlay on the canvas
 - **Community API** — register custom elements via `window.vizlace.registerElement()`
 - **Multiple dashboards** — create and switch between independent dashboards
+
+## Requirements
+
+Home Assistant 2024.7.0 or newer (uses `hass.http.async_register_static_paths`, which replaced the older `register_static_path` API).
 
 ## Installation
 
@@ -49,9 +56,10 @@ The build output goes directly to `custom_components/vizlace/www/vizlace.js`.
    - Use the **left toolbar** to add elements to the canvas.
    - **Drag** elements to reposition them; use the **resize handles** to resize.
    - Click an element to select it — the **right inspector** shows its properties.
-   - Set the **Entity ID** to link the element to a HA entity.
+   - Set the **Entity ID** to link the element to a HA entity — start typing to search by entity id or friendly name and pick a match, or type a full id directly.
    - Configure element-specific options (color, label, range, etc.).
    - Click **Save** when done.
+   - With nothing selected, the right panel shows **Canvas Settings**: grid spacing, a snap-to-grid toggle, and an optional screen width/height that draws a dashed guide on the canvas so you can see how much space a real screen gives you.
 4. Click the dashboard card to **view** it with live data.
 
 ## Built-in elements
@@ -124,6 +132,7 @@ frontend/src/                ← TypeScript frontend
   editor/canvas.ts             drag-and-drop editor canvas (pointer events)
   editor/toolbar.ts            element type picker sidebar
   editor/inspector.ts          selected-element property panel
+  editor/entity-picker.ts      searchable entity id combobox
   editor/index.ts              editor orchestrator
   viewer/canvas.ts             read-only live-data canvas
 ```
@@ -135,10 +144,12 @@ All commands are prefixed `vizlace/`.
 | Command | Params | Returns |
 |---|---|---|
 | `vizlace/dashboards/list` | — | `{ dashboards: Dashboard[] }` |
-| `vizlace/dashboard/get` | `{ id }` | `{ dashboard: Dashboard }` |
+| `vizlace/dashboard/get` | `{ dashboard_id }` | `{ dashboard: Dashboard }` |
 | `vizlace/dashboard/save` | `{ dashboard: Dashboard }` | `{ dashboard: Dashboard }` |
-| `vizlace/dashboard/delete` | `{ id }` | `{}` |
+| `vizlace/dashboard/delete` | `{ dashboard_id }` | `{ id }` |
 | `vizlace/call_service` | `{ domain, service, service_data? }` | `{}` |
+
+> Note: the dashboard id param is named `dashboard_id`, not `id` — the top-level `id` field on every HA WebSocket message is reserved for the framework's own request/response correlation number and gets overwritten if reused.
 
 ## License
 
