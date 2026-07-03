@@ -1,6 +1,10 @@
 import "./vizlace-panel";
 import "./elements/gauge";
+import "./elements/gauge-horizontal";
+import "./elements/tricolor-gauge";
 import "./elements/text-display";
 import "./elements/button";
+import "./elements/toggle-button";
 import "./elements/color-field";
 import "./elements/heating";
+import "./elements/frame";

@@ -45,6 +45,8 @@ export class VizlaceViewerCanvas extends LitElement {
             ? this.hass?.states[el.entity_id] ?? null
             : null;
 
+          const isFrame = el.type === "frame";
+
           return html`
             <div
               class="element-wrapper"
@@ -53,6 +55,8 @@ export class VizlaceViewerCanvas extends LitElement {
                 top: `${el.y}px`,
                 width: `${el.width}px`,
                 height: `${el.height}px`,
+                background: isFrame ? "transparent" : undefined,
+                pointerEvents: isFrame ? "none" : undefined,
               })}
             >
               ${def

@@ -1,6 +1,12 @@
 import { html } from "lit";
 import type { VizlaceElementDefinition } from "../types";
 import { registry } from "./registry";
+import {
+  styleConfigField,
+  getStyle,
+  panelChromeCss,
+  fgColorMuted,
+} from "./styles";
 
 const textDisplayDef: VizlaceElementDefinition = {
   type: "text-display",
@@ -20,6 +26,7 @@ const textDisplayDef: VizlaceElementDefinition = {
     { key: "unit", label: "Unit", type: "text", default: "" },
     { key: "fontSize", label: "Font size (px)", type: "number", default: 28 },
     { key: "color", label: "Color", type: "color", default: "#ffffff" },
+    styleConfigField,
   ],
   render(config, state, _hass) {
     const cfg = config.config;
@@ -28,6 +35,8 @@ const textDisplayDef: VizlaceElementDefinition = {
     const color = String(cfg.color ?? "#ffffff");
     const unit = String(cfg.unit ?? "");
     const prefix = String(cfg.prefix ?? "");
+    const style = getStyle(cfg);
+    const fgMuted = fgColorMuted(style);
 
     const displayValue = state
       ? `${prefix}${state.state}${unit}`
@@ -40,6 +49,7 @@ const textDisplayDef: VizlaceElementDefinition = {
           display:flex;flex-direction:column;
           align-items:center;justify-content:center;
           box-sizing:border-box;padding:4px;
+          ${panelChromeCss(style, "text-display")}
         "
       >
         <div
@@ -55,9 +65,7 @@ const textDisplayDef: VizlaceElementDefinition = {
           ${displayValue}
         </div>
         ${label
-          ? html`<div
-              style="font-size:11px;color:var(--secondary-text-color,#aaa);margin-top:2px;"
-            >
+          ? html`<div style="font-size:11px;color:${fgMuted};margin-top:2px;">
               ${label}
             </div>`
           : ""}

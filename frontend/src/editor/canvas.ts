@@ -302,6 +302,7 @@ export class VizlaceEditorCanvas extends LitElement {
           const entityState = el.entity_id
             ? this.hass?.states[el.entity_id] ?? null
             : null;
+          const isFrame = el.type === "frame";
 
           return html`
             <div
@@ -315,7 +316,12 @@ export class VizlaceEditorCanvas extends LitElement {
               })}
               @pointerdown=${(e: PointerEvent) => this._onPointerDown(e, el)}
             >
-              <div class="element-inner">
+              <div
+                class="element-inner"
+                style=${styleMap({
+                  background: isFrame ? "transparent" : undefined,
+                })}
+              >
                 ${def
                   ? def.render(el, entityState, this.hass)
                   : html`<div

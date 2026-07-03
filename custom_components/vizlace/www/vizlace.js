@@ -347,7 +347,7 @@ function M(t2, i4, s2 = t2, e2) {
   const o2 = a(i4) ? void 0 : i4._$litDirective$;
   return (h2 == null ? void 0 : h2.constructor) !== o2 && ((_b = h2 == null ? void 0 : h2._$AO) == null ? void 0 : _b.call(h2, false), void 0 === o2 ? h2 = void 0 : (h2 = new o2(t2), h2._$AT(t2, s2, e2)), void 0 !== e2 ? (s2._$Co ?? (s2._$Co = []))[e2] = h2 : s2._$Cl = h2), void 0 !== h2 && (i4 = M(t2, h2._$AS(t2, i4.values), h2, e2)), i4;
 }
-class R {
+let R$1 = class R {
   constructor(t2, i4) {
     this._$AV = [], this._$AN = void 0, this._$AD = t2, this._$AM = i4;
   }
@@ -374,7 +374,7 @@ class R {
     let i4 = 0;
     for (const s2 of this._$AV) void 0 !== s2 && (void 0 !== s2.strings ? (s2._$AI(t2, s2, i4), i4 += s2.strings.length - 2) : s2._$AI(t2[i4])), i4++;
   }
-}
+};
 class k {
   get _$AU() {
     var _a2;
@@ -411,7 +411,7 @@ class k {
     const { values: i4, _$litType$: s2 } = t2, e2 = "number" == typeof s2 ? this._$AC(t2) : (void 0 === s2.el && (s2.el = S.createElement(V(s2.h, s2.h[0]), this.options)), s2);
     if (((_a2 = this._$AH) == null ? void 0 : _a2._$AD) === e2) this._$AH.p(i4);
     else {
-      const t3 = new R(e2, this), s3 = t3.u(this.options);
+      const t3 = new R$1(e2, this), s3 = t3.u(this.options);
       t3.p(i4), this.T(s3), this._$AH = t3;
     }
   }
@@ -888,6 +888,7 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
       const def = registry.get(el.type);
       const selected = el.id === this.selectedId;
       const entityState = el.entity_id ? ((_a2 = this.hass) == null ? void 0 : _a2.states[el.entity_id]) ?? null : null;
+      const isFrame = el.type === "frame";
       return b`
             <div
               class="element-wrapper ${selected ? "selected" : ""}"
@@ -900,7 +901,12 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
       })}
               @pointerdown=${(e2) => this._onPointerDown(e2, el)}
             >
-              <div class="element-inner">
+              <div
+                class="element-inner"
+                style=${o({
+        background: isFrame ? "transparent" : void 0
+      })}
+              >
                 ${def ? def.render(el, entityState, this.hass) : b`<div
                       style="display:flex;align-items:center;justify-content:center;height:100%;color:#f55;font-size:12px;"
                     >
@@ -1513,13 +1519,20 @@ const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
                   <label>${field.label}</label>
                   <input
                     type=${field.type === "color" ? "color" : field.type === "number" ? "number" : "text"}
+                    min=${field.min ?? A}
+                    max=${field.max ?? A}
+                    step=${field.step ?? A}
                     .value=${String(val)}
                     @change=${(e2) => {
         const raw = e2.target.value;
-        this._patchConfig(
-          field.key,
-          field.type === "number" ? Number(raw) : raw
-        );
+        let parsed = raw;
+        if (field.type === "number") {
+          let n3 = Number(raw);
+          if (field.min !== void 0) n3 = Math.max(field.min, n3);
+          if (field.max !== void 0) n3 = Math.min(field.max, n3);
+          parsed = n3;
+        }
+        this._patchConfig(field.key, parsed);
       }}
                   />
                 </div>
@@ -1883,6 +1896,7 @@ const _VizlaceViewerCanvas = class _VizlaceViewerCanvas extends i$2 {
       var _a2;
       const def = registry.get(el.type);
       const entityState = el.entity_id ? ((_a2 = this.hass) == null ? void 0 : _a2.states[el.entity_id]) ?? null : null;
+      const isFrame = el.type === "frame";
       return b`
             <div
               class="element-wrapper"
@@ -1890,7 +1904,9 @@ const _VizlaceViewerCanvas = class _VizlaceViewerCanvas extends i$2 {
         left: `${el.x}px`,
         top: `${el.y}px`,
         width: `${el.width}px`,
-        height: `${el.height}px`
+        height: `${el.height}px`,
+        background: isFrame ? "transparent" : void 0,
+        pointerEvents: isFrame ? "none" : void 0
       })}
             >
               ${def ? def.render(el, entityState, this.hass) : b`<div
@@ -2264,6 +2280,65 @@ function arcPath(cx, cy, r2, startDeg, endDeg) {
   const large = endDeg - startDeg > 180 ? 1 : 0;
   return `M ${sx} ${sy} A ${r2} ${r2} 0 ${large} 1 ${ex} ${ey}`;
 }
+const styleConfigField = {
+  key: "style",
+  label: "Style",
+  type: "select",
+  options: [
+    { value: "default", label: "Standard" },
+    { value: "metallic", label: "Metallic" },
+    { value: "mondrian", label: "Mondrian" }
+  ],
+  default: "default"
+};
+function getStyle(config) {
+  return config.style === "metallic" || config.style === "mondrian" ? config.style : "default";
+}
+const METALLIC_BG = "linear-gradient(135deg, #9aa5ad 0%, #e2e8ec 22%, #6b7580 48%, #f2f5f7 58%, #7c8791 82%, #b7c1c8 100%)";
+const METALLIC_BORDER = "1px solid rgba(255,255,255,0.5)";
+const METALLIC_SHADOW = "inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -2px 4px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.4)";
+const MONDRIAN_BG = "#f2f2ea";
+const MONDRIAN_BORDER = "5px solid #111";
+const MONDRIAN_COLORS = ["#d81e05", "#f7d716", "#0a4ea3"];
+function mondrianAccent(type) {
+  let h2 = 0;
+  for (let i4 = 0; i4 < type.length; i4++) h2 = h2 * 31 + type.charCodeAt(i4) >>> 0;
+  return MONDRIAN_COLORS[h2 % MONDRIAN_COLORS.length];
+}
+function panelChromeCss(style, type) {
+  if (style === "metallic") {
+    return `background:${METALLIC_BG};border:${METALLIC_BORDER};box-shadow:${METALLIC_SHADOW};border-radius:10px;`;
+  }
+  if (style === "mondrian") {
+    return `background:${MONDRIAN_BG};border:${MONDRIAN_BORDER};box-shadow:inset -14px -14px 0 0 ${mondrianAccent(
+      type
+    )};border-radius:0;`;
+  }
+  return "";
+}
+function fgColor(style) {
+  return style === "default" ? "var(--primary-text-color,#fff)" : "#1a1a1a";
+}
+function fgColorMuted(style) {
+  return style === "default" ? "var(--secondary-text-color,#aaa)" : "#4a4a4a";
+}
+function trackColor(style) {
+  return style === "default" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.18)";
+}
+function controlBackground(style, color) {
+  if (style === "metallic") {
+    return `linear-gradient(135deg, ${color} 0%, #fff 8%, ${color} 40%, #000 105%)`;
+  }
+  return color;
+}
+function controlBorder(style) {
+  if (style === "metallic") return "1px solid rgba(255,255,255,0.6)";
+  if (style === "mondrian") return "4px solid #111";
+  return "none";
+}
+function controlRadius(style) {
+  return style === "mondrian" ? "0" : "6px";
+}
 const gaugeDef = {
   type: "gauge",
   label: "Gauge",
@@ -2281,7 +2356,8 @@ const gaugeDef = {
     { key: "min", label: "Min", type: "number", default: 0 },
     { key: "max", label: "Max", type: "number", default: 100 },
     { key: "unit", label: "Unit", type: "text", default: "" },
-    { key: "color", label: "Color", type: "color", default: "#4caf50" }
+    { key: "color", label: "Color", type: "color", default: "#4caf50" },
+    styleConfigField
   ],
   render(config, state, _hass) {
     const cfg = config.config;
@@ -2290,30 +2366,37 @@ const gaugeDef = {
     const unit = String(cfg.unit ?? "");
     const label = String(cfg.label ?? "");
     const color = String(cfg.color ?? "#4caf50");
+    const style = getStyle(cfg);
+    const fg = fgColor(style);
+    const fgMuted = fgColorMuted(style);
+    const track = trackColor(style);
     const raw = state ? parseFloat(state.state) : NaN;
     const value = isNaN(raw) ? 0 : raw;
     const pct = Math.min(1, Math.max(0, (value - min) / (max - min)));
-    const START = -135;
-    const RANGE = 270;
-    const endDeg = START + pct * RANGE;
+    const START2 = -135;
+    const RANGE2 = 270;
+    const endDeg = START2 + pct * RANGE2;
     const cx = 80;
     const cy = 80;
     const r2 = 60;
-    const trackPath = arcPath(cx, cy, r2, START, START + RANGE);
-    const fillPath = pct > 0 ? arcPath(cx, cy, r2, START, endDeg) : "";
+    const trackPath = arcPath(cx, cy, r2, START2, START2 + RANGE2);
+    const fillPath = pct > 0 ? arcPath(cx, cy, r2, START2, endDeg) : "";
     return b`
       <div
-        style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;"
+        style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;${panelChromeCss(
+      style,
+      "gauge"
+    )}"
       >
         ${w`
           <svg viewBox="0 0 160 160" width="100%" height="100%" style="overflow:visible">
-            <path d="${trackPath}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="12" stroke-linecap="round"/>
+            <path d="${trackPath}" fill="none" stroke="${track}" stroke-width="12" stroke-linecap="round"/>
             ${fillPath ? w`<path d="${fillPath}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>` : ""}
             <text x="80" y="82" text-anchor="middle" dominant-baseline="middle"
-              font-size="22" font-weight="bold" fill="var(--primary-text-color,#fff)">
+              font-size="22" font-weight="bold" fill="${fg}">
               ${state ? state.state : "—"}${unit}
             </text>
-            ${label ? w`<text x="80" y="106" text-anchor="middle" font-size="11" fill="var(--secondary-text-color,#aaa)">${label}</text>` : ""}
+            ${label ? w`<text x="80" y="106" text-anchor="middle" font-size="11" fill="${fgMuted}">${label}</text>` : ""}
           </svg>
         `}
       </div>
@@ -2321,6 +2404,198 @@ const gaugeDef = {
   }
 };
 registry.register(gaugeDef);
+const gaugeHorizontalDef = {
+  type: "gauge-horizontal",
+  label: "Gauge (waagerecht)",
+  icon: "mdi:gauge-low",
+  defaultSize: { width: 220, height: 90 },
+  defaultConfig: {
+    min: 0,
+    max: 100,
+    unit: "",
+    label: "",
+    color: "#4caf50"
+  },
+  configFields: [
+    { key: "label", label: "Label", type: "text", default: "" },
+    { key: "min", label: "Min", type: "number", default: 0 },
+    { key: "max", label: "Max", type: "number", default: 100 },
+    { key: "unit", label: "Unit", type: "text", default: "" },
+    { key: "color", label: "Color", type: "color", default: "#4caf50" },
+    styleConfigField
+  ],
+  render(config, state, _hass) {
+    const cfg = config.config;
+    const min = Number(cfg.min ?? 0);
+    const max = Number(cfg.max ?? 100);
+    const unit = String(cfg.unit ?? "");
+    const label = String(cfg.label ?? "");
+    const color = String(cfg.color ?? "#4caf50");
+    const style = getStyle(cfg);
+    const fg = fgColor(style);
+    const fgMuted = fgColorMuted(style);
+    const track = trackColor(style);
+    const radius = controlRadius(style);
+    const raw = state ? parseFloat(state.state) : NaN;
+    const value = isNaN(raw) ? 0 : raw;
+    const pct = Math.min(1, Math.max(0, (value - min) / (max - min))) * 100;
+    return b`
+      <div
+        style="
+          width:100%;height:100%;box-sizing:border-box;padding:10px 14px;
+          display:flex;flex-direction:column;justify-content:center;gap:6px;
+          ${panelChromeCss(style, "gauge-horizontal")}
+        "
+      >
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          ${label ? b`<span style="font-size:11px;color:${fgMuted};">${label}</span>` : b`<span></span>`}
+          <span style="font-size:16px;font-weight:bold;color:${fg};">
+            ${state ? state.state : "—"}${unit}
+          </span>
+        </div>
+        <div
+          style="
+            position:relative;height:14px;border-radius:${radius};
+            background:${track};overflow:hidden;
+          "
+        >
+          <div
+            style="
+              position:absolute;left:0;top:0;bottom:0;width:${pct}%;
+              background:${color};border-radius:${radius};
+              transition:width 0.3s;
+            "
+          ></div>
+        </div>
+      </div>
+    `;
+  }
+};
+registry.register(gaugeHorizontalDef);
+const GREEN = "#4caf50";
+const YELLOW = "#ffca28";
+const RED = "#f44336";
+const START = -135;
+const RANGE = 270;
+const CX = 80;
+const CY = 80;
+const R2 = 60;
+const tricolorGaugeDef = {
+  type: "tricolor-gauge",
+  label: "Ampel-Gauge",
+  icon: "mdi:gauge-full",
+  defaultSize: { width: 160, height: 160 },
+  defaultConfig: {
+    min: 0,
+    max: 100,
+    unit: "",
+    label: "",
+    green_pct: 40,
+    yellow_pct: 30,
+    red_pct: 30,
+    invert: false
+  },
+  configFields: [
+    { key: "label", label: "Label", type: "text", default: "" },
+    { key: "min", label: "Min", type: "number", default: 0 },
+    { key: "max", label: "Max", type: "number", default: 100 },
+    { key: "unit", label: "Unit", type: "text", default: "" },
+    {
+      key: "green_pct",
+      label: "Grün (%)",
+      type: "number",
+      default: 40,
+      min: 0,
+      max: 100
+    },
+    {
+      key: "yellow_pct",
+      label: "Gelb (%)",
+      type: "number",
+      default: 30,
+      min: 0,
+      max: 100
+    },
+    {
+      key: "red_pct",
+      label: "Rot (%)",
+      type: "number",
+      default: 30,
+      min: 0,
+      max: 100
+    },
+    {
+      key: "invert",
+      label: "Reihenfolge umkehren (Rot am Anfang)",
+      type: "boolean",
+      default: false
+    },
+    styleConfigField
+  ],
+  render(config, state, _hass) {
+    const cfg = config.config;
+    const min = Number(cfg.min ?? 0);
+    const max = Number(cfg.max ?? 100);
+    const unit = String(cfg.unit ?? "");
+    const label = String(cfg.label ?? "");
+    const invert = Boolean(cfg.invert);
+    const style = getStyle(cfg);
+    const fg = fgColor(style);
+    const fgMuted = fgColorMuted(style);
+    const green = Math.max(0, Number(cfg.green_pct ?? 40));
+    const yellow = Math.max(0, Number(cfg.yellow_pct ?? 30));
+    const red = Math.max(0, Number(cfg.red_pct ?? 30));
+    const total = green + yellow + red || 1;
+    const segments = invert ? [
+      { color: RED, frac: red / total },
+      { color: YELLOW, frac: yellow / total },
+      { color: GREEN, frac: green / total }
+    ] : [
+      { color: GREEN, frac: green / total },
+      { color: YELLOW, frac: yellow / total },
+      { color: RED, frac: red / total }
+    ];
+    let cursor = START;
+    const arcs = segments.map((seg) => {
+      const segStart = cursor;
+      const segEnd = cursor + seg.frac * RANGE;
+      cursor = segEnd;
+      return { color: seg.color, start: segStart, end: segEnd };
+    });
+    const raw = state ? parseFloat(state.state) : NaN;
+    const value = isNaN(raw) ? min : raw;
+    const pct = Math.min(1, Math.max(0, (value - min) / (max - min)));
+    const needleDeg = START + pct * RANGE;
+    const [needleX, needleY] = polarToCartesian(CX, CY, R2 - 6, needleDeg);
+    const [hubOuterX, hubOuterY] = polarToCartesian(CX, CY, 10, needleDeg);
+    const needleColor = style === "default" ? "#fff" : "#1a1a1a";
+    return b`
+      <div
+        style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;${panelChromeCss(
+      style,
+      "tricolor-gauge"
+    )}"
+      >
+        ${w`
+          <svg viewBox="0 0 160 160" width="100%" height="100%" style="overflow:visible">
+            ${arcs.map(
+      (a2) => w`<path d="${arcPath(CX, CY, R2, a2.start, a2.end)}" fill="none" stroke="${a2.color}" stroke-width="12" stroke-linecap="butt"/>`
+    )}
+            <line x1="${hubOuterX}" y1="${hubOuterY}" x2="${needleX}" y2="${needleY}"
+              stroke="${needleColor}" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="${CX}" cy="${CY}" r="6" fill="${needleColor}"/>
+            <text x="80" y="130" text-anchor="middle" dominant-baseline="middle"
+              font-size="18" font-weight="bold" fill="${fg}">
+              ${state ? state.state : "—"}${unit}
+            </text>
+            ${label ? w`<text x="80" y="148" text-anchor="middle" font-size="11" fill="${fgMuted}">${label}</text>` : ""}
+          </svg>
+        `}
+      </div>
+    `;
+  }
+};
+registry.register(tricolorGaugeDef);
 const textDisplayDef = {
   type: "text-display",
   label: "Text Display",
@@ -2338,7 +2613,8 @@ const textDisplayDef = {
     { key: "prefix", label: "Prefix", type: "text", default: "" },
     { key: "unit", label: "Unit", type: "text", default: "" },
     { key: "fontSize", label: "Font size (px)", type: "number", default: 28 },
-    { key: "color", label: "Color", type: "color", default: "#ffffff" }
+    { key: "color", label: "Color", type: "color", default: "#ffffff" },
+    styleConfigField
   ],
   render(config, state, _hass) {
     const cfg = config.config;
@@ -2347,6 +2623,8 @@ const textDisplayDef = {
     const color = String(cfg.color ?? "#ffffff");
     const unit = String(cfg.unit ?? "");
     const prefix = String(cfg.prefix ?? "");
+    const style = getStyle(cfg);
+    const fgMuted = fgColorMuted(style);
     const displayValue = state ? `${prefix}${state.state}${unit}` : "—";
     return b`
       <div
@@ -2355,6 +2633,7 @@ const textDisplayDef = {
           display:flex;flex-direction:column;
           align-items:center;justify-content:center;
           box-sizing:border-box;padding:4px;
+          ${panelChromeCss(style, "text-display")}
         "
       >
         <div
@@ -2369,9 +2648,7 @@ const textDisplayDef = {
         >
           ${displayValue}
         </div>
-        ${label ? b`<div
-              style="font-size:11px;color:var(--secondary-text-color,#aaa);margin-top:2px;"
-            >
+        ${label ? b`<div style="font-size:11px;color:${fgMuted};margin-top:2px;">
               ${label}
             </div>` : ""}
       </div>
@@ -2411,7 +2688,8 @@ const buttonDef = {
       type: "text",
       default: "{}"
     },
-    { key: "color", label: "Color", type: "color", default: "#2196f3" }
+    { key: "color", label: "Color", type: "color", default: "#2196f3" },
+    styleConfigField
   ],
   render(config, _state, hass) {
     const cfg = config.config;
@@ -2419,6 +2697,7 @@ const buttonDef = {
     const domain = String(cfg.service_domain ?? "homeassistant");
     const service = String(cfg.service_name ?? "toggle");
     const color = String(cfg.color ?? "#2196f3");
+    const style = getStyle(cfg);
     let serviceData = {};
     try {
       serviceData = JSON.parse(String(cfg.service_data ?? "{}"));
@@ -2438,10 +2717,10 @@ const buttonDef = {
         <button
           @click=${handleClick}
           style="
-            background:${color};
+            background:${controlBackground(style, color)};
             color:#fff;
-            border:none;
-            border-radius:6px;
+            border:${controlBorder(style)};
+            border-radius:${controlRadius(style)};
             padding:8px 20px;
             font-size:15px;
             font-weight:bold;
@@ -2462,6 +2741,82 @@ const buttonDef = {
   }
 };
 registry.register(buttonDef);
+const toggleButtonDef = {
+  type: "toggle-button",
+  label: "Toggle-Button",
+  icon: "mdi:toggle-switch",
+  defaultSize: { width: 140, height: 60 },
+  defaultConfig: {
+    on_label: "An",
+    off_label: "Aus",
+    on_color: "#4caf50",
+    off_color: "#757575"
+  },
+  configFields: [
+    { key: "on_label", label: "Text (An)", type: "text", default: "An" },
+    { key: "off_label", label: "Text (Aus)", type: "text", default: "Aus" },
+    {
+      key: "on_color",
+      label: "Farbe (An)",
+      type: "color",
+      default: "#4caf50"
+    },
+    {
+      key: "off_color",
+      label: "Farbe (Aus)",
+      type: "color",
+      default: "#757575"
+    },
+    styleConfigField
+  ],
+  render(config, state, hass) {
+    const cfg = config.config;
+    const onLabel = String(cfg.on_label ?? "An");
+    const offLabel = String(cfg.off_label ?? "Aus");
+    const onColor = String(cfg.on_color ?? "#4caf50");
+    const offColor = String(cfg.off_color ?? "#757575");
+    const style = getStyle(cfg);
+    const isOn = state ? state.state === "on" || state.state === "true" : false;
+    const label = isOn ? onLabel : offLabel;
+    const color = isOn ? onColor : offColor;
+    const handleClick = (e2) => {
+      e2.stopPropagation();
+      if (!config.entity_id) return;
+      hass.callService("homeassistant", "toggle", {
+        entity_id: config.entity_id
+      });
+    };
+    return b`
+      <div
+        style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"
+      >
+        <button
+          @click=${handleClick}
+          style="
+            background:${controlBackground(style, color)};
+            color:#fff;
+            border:${controlBorder(style)};
+            border-radius:${controlRadius(style)};
+            padding:8px 20px;
+            font-size:15px;
+            font-weight:bold;
+            cursor:pointer;
+            width:90%;
+            height:80%;
+            box-shadow:0 2px 6px rgba(0,0,0,0.3);
+            transition:background 0.2s, filter 0.1s;
+          "
+          @mousedown=${(e2) => e2.currentTarget.style.filter = "brightness(0.85)"}
+          @mouseup=${(e2) => e2.currentTarget.style.filter = ""}
+          @mouseleave=${(e2) => e2.currentTarget.style.filter = ""}
+        >
+          ${label}
+        </button>
+      </div>
+    `;
+  }
+};
+registry.register(toggleButtonDef);
 const colorFieldDef = {
   type: "color-field",
   label: "Color Field",
@@ -2496,7 +2851,8 @@ const colorFieldDef = {
       type: "color",
       default: "#000000"
     },
-    { key: "label", label: "Label", type: "text", default: "" }
+    { key: "label", label: "Label", type: "text", default: "" },
+    styleConfigField
   ],
   render(config, state, _hass) {
     const cfg = config.config;
@@ -2504,6 +2860,7 @@ const colorFieldDef = {
     const onColor = String(cfg.on_color ?? "#ffffff");
     const offColor = String(cfg.off_color ?? "#000000");
     const label = String(cfg.label ?? "");
+    const style = getStyle(cfg);
     let bgColor = offColor;
     if (state) {
       if (mode === "color") {
@@ -2516,13 +2873,14 @@ const colorFieldDef = {
       <div
         style="
           width:100%;height:100%;
-          background:${bgColor};
+          background:${controlBackground(style, bgColor)};
+          border:${controlBorder(style)};
           display:flex;
           align-items:flex-end;
           justify-content:center;
           padding:4px;
           box-sizing:border-box;
-          border-radius:4px;
+          border-radius:${controlRadius(style)};
           transition:background 0.3s;
         "
       >
@@ -2556,7 +2914,8 @@ const heatingDef = {
     { key: "label", label: "Label", type: "text", default: "Thermostat" },
     { key: "min_temp", label: "Min Temp (°C)", type: "number", default: 5 },
     { key: "max_temp", label: "Max Temp (°C)", type: "number", default: 35 },
-    { key: "step", label: "Step", type: "number", default: 0.5 }
+    { key: "step", label: "Step", type: "number", default: 0.5 },
+    styleConfigField
   ],
   render(config, state, hass) {
     const cfg = config.config;
@@ -2564,6 +2923,10 @@ const heatingDef = {
     const minTemp = Number(cfg.min_temp ?? 5);
     const maxTemp = Number(cfg.max_temp ?? 35);
     const step = Number(cfg.step ?? 0.5);
+    const style = getStyle(cfg);
+    const fg = fgColor(style);
+    const fgMuted = fgColorMuted(style);
+    const radius = controlRadius(style);
     const currentTemp = state ? state.attributes["current_temperature"] ?? null : null;
     const setPoint = state ? state.attributes["temperature"] ?? null : null;
     const adjust = (delta) => (e2) => {
@@ -2585,18 +2948,17 @@ const heatingDef = {
           display:flex;flex-direction:column;
           align-items:center;justify-content:space-between;
           padding:8px;box-sizing:border-box;
-          color:var(--primary-text-color,#fff);
+          color:${fg};
+          ${panelChromeCss(style, "heating")}
         "
       >
-        <div style="font-size:12px;color:var(--secondary-text-color,#aaa);">
+        <div style="font-size:12px;color:${fgMuted};">
           ${label}
         </div>
 
-        <div
-          style="font-size:13px;color:var(--secondary-text-color,#aaa);"
-        >
+        <div style="font-size:13px;color:${fgMuted};">
           Current:
-          <span style="font-weight:bold;color:var(--primary-text-color,#fff);">
+          <span style="font-weight:bold;color:${fg};">
             ${currentTemp !== null ? `${currentTemp}°C` : "—"}
           </span>
         </div>
@@ -2607,9 +2969,9 @@ const heatingDef = {
           <button
             @click=${adjust(-step)}
             style="
-              width:36px;height:36px;border-radius:50%;
-              border:none;background:rgba(255,255,255,0.12);
-              color:var(--primary-text-color,#fff);
+              width:36px;height:36px;border-radius:${radius};
+              border:none;background:rgba(128,128,128,0.2);
+              color:${fg};
               font-size:22px;cursor:pointer;
               display:flex;align-items:center;justify-content:center;
             "
@@ -2621,9 +2983,7 @@ const heatingDef = {
             >
               ${setPoint !== null ? `${setPoint}°C` : "—"}
             </div>
-            <div
-              style="font-size:10px;color:var(--secondary-text-color,#aaa);margin-top:2px;"
-            >
+            <div style="font-size:10px;color:${fgMuted};margin-top:2px;">
               Set point
             </div>
           </div>
@@ -2631,9 +2991,9 @@ const heatingDef = {
           <button
             @click=${adjust(step)}
             style="
-              width:36px;height:36px;border-radius:50%;
-              border:none;background:rgba(255,255,255,0.12);
-              color:var(--primary-text-color,#fff);
+              width:36px;height:36px;border-radius:${radius};
+              border:none;background:rgba(128,128,128,0.2);
+              color:${fg};
               font-size:22px;cursor:pointer;
               display:flex;align-items:center;justify-content:center;
             "
@@ -2642,9 +3002,9 @@ const heatingDef = {
 
         <div
           style="
-            font-size:11px;color:var(--secondary-text-color,#aaa);
+            font-size:11px;color:${fgMuted};
             padding:4px 8px;
-            background:rgba(255,255,255,0.05);
+            background:rgba(128,128,128,0.1);
             border-radius:4px;
           "
         >
@@ -2655,3 +3015,44 @@ const heatingDef = {
   }
 };
 registry.register(heatingDef);
+const frameDef = {
+  type: "frame",
+  label: "Rahmen",
+  icon: "mdi:crop-free",
+  defaultSize: { width: 300, height: 200 },
+  defaultConfig: {
+    borderWidth: 2,
+    borderColor: "#03a9f4"
+  },
+  configFields: [
+    {
+      key: "borderWidth",
+      label: "Randstärke (px)",
+      type: "number",
+      default: 2,
+      min: 0,
+      max: 20
+    },
+    {
+      key: "borderColor",
+      label: "Randfarbe",
+      type: "color",
+      default: "#03a9f4"
+    }
+  ],
+  render(config, _state, _hass) {
+    const cfg = config.config;
+    const borderWidth = Math.max(0, Math.min(20, Number(cfg.borderWidth ?? 2)));
+    const borderColor = String(cfg.borderColor ?? "#03a9f4");
+    return b`
+      <div
+        style="
+          width:100%;height:100%;box-sizing:border-box;
+          border:${borderWidth}px solid ${borderColor};
+          background:transparent;
+        "
+      ></div>
+    `;
+  }
+};
+registry.register(frameDef);

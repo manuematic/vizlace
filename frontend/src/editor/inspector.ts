@@ -329,13 +329,20 @@ export class VizlaceEditorInspector extends LitElement {
                       : field.type === "number"
                       ? "number"
                       : "text"}
+                    min=${field.min ?? nothing}
+                    max=${field.max ?? nothing}
+                    step=${field.step ?? nothing}
                     .value=${String(val)}
                     @change=${(e: Event) => {
                       const raw = (e.target as HTMLInputElement).value;
-                      this._patchConfig(
-                        field.key,
-                        field.type === "number" ? Number(raw) : raw
-                      );
+                      let parsed: unknown = raw;
+                      if (field.type === "number") {
+                        let n = Number(raw);
+                        if (field.min !== undefined) n = Math.max(field.min, n);
+                        if (field.max !== undefined) n = Math.min(field.max, n);
+                        parsed = n;
+                      }
+                      this._patchConfig(field.key, parsed);
                     }}
                   />
                 </div>

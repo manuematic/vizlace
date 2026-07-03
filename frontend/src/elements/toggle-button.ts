@@ -9,63 +9,52 @@ import {
   controlRadius,
 } from "./styles";
 
-const buttonDef: VizlaceElementDefinition = {
-  type: "button",
-  label: "Button",
-  icon: "mdi:gesture-tap-button",
+const toggleButtonDef: VizlaceElementDefinition = {
+  type: "toggle-button",
+  label: "Toggle-Button",
+  icon: "mdi:toggle-switch",
   defaultSize: { width: 140, height: 60 },
   defaultConfig: {
-    label: "Press",
-    service_domain: "homeassistant",
-    service_name: "toggle",
-    service_data: "{}",
-    color: "#2196f3",
+    on_label: "An",
+    off_label: "Aus",
+    on_color: "#4caf50",
+    off_color: "#757575",
   },
   configFields: [
-    { key: "label", label: "Button Label", type: "text", default: "Press" },
+    { key: "on_label", label: "Text (An)", type: "text", default: "An" },
+    { key: "off_label", label: "Text (Aus)", type: "text", default: "Aus" },
     {
-      key: "service_domain",
-      label: "Service Domain",
-      type: "text",
-      default: "homeassistant",
+      key: "on_color",
+      label: "Farbe (An)",
+      type: "color",
+      default: "#4caf50",
     },
     {
-      key: "service_name",
-      label: "Service Name",
-      type: "text",
-      default: "toggle",
+      key: "off_color",
+      label: "Farbe (Aus)",
+      type: "color",
+      default: "#757575",
     },
-    {
-      key: "service_data",
-      label: "Service Data (JSON)",
-      type: "text",
-      default: "{}",
-    },
-    { key: "color", label: "Color", type: "color", default: "#2196f3" },
     styleConfigField,
   ],
-  render(config, _state, hass) {
+  render(config, state, hass) {
     const cfg = config.config;
-    const label = String(cfg.label ?? "Press");
-    const domain = String(cfg.service_domain ?? "homeassistant");
-    const service = String(cfg.service_name ?? "toggle");
-    const color = String(cfg.color ?? "#2196f3");
+    const onLabel = String(cfg.on_label ?? "An");
+    const offLabel = String(cfg.off_label ?? "Aus");
+    const onColor = String(cfg.on_color ?? "#4caf50");
+    const offColor = String(cfg.off_color ?? "#757575");
     const style = getStyle(cfg);
 
-    let serviceData: Record<string, unknown> = {};
-    try {
-      serviceData = JSON.parse(String(cfg.service_data ?? "{}"));
-    } catch {
-      // ignore bad JSON
-    }
-
-    if (config.entity_id && !serviceData.entity_id) {
-      serviceData = { entity_id: config.entity_id, ...serviceData };
-    }
+    const isOn = state ? state.state === "on" || state.state === "true" : false;
+    const label = isOn ? onLabel : offLabel;
+    const color = isOn ? onColor : offColor;
 
     const handleClick = (e: Event) => {
       e.stopPropagation();
-      hass.callService(domain, service, serviceData);
+      if (!config.entity_id) return;
+      hass.callService("homeassistant", "toggle", {
+        entity_id: config.entity_id,
+      });
     };
 
     return html`
@@ -86,7 +75,7 @@ const buttonDef: VizlaceElementDefinition = {
             width:90%;
             height:80%;
             box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            transition:filter 0.1s;
+            transition:background 0.2s, filter 0.1s;
           "
           @mousedown=${(e: Event) =>
             ((e.currentTarget as HTMLElement).style.filter = "brightness(0.85)")}
@@ -102,4 +91,4 @@ const buttonDef: VizlaceElementDefinition = {
   },
 };
 
-registry.register(buttonDef);
+registry.register(toggleButtonDef);

@@ -31,6 +31,9 @@ export interface ConfigField {
   type: "text" | "number" | "color" | "select" | "boolean";
   options?: { value: string; label: string }[];
   default?: unknown;
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export interface VizlaceElementDefinition {
