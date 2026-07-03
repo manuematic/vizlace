@@ -123,6 +123,18 @@ export class VizlaceEditorCanvas extends LitElement {
   private drag: DragState | null = null;
   private resize: ResizeState | null = null;
 
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("vizlace-registry-changed", this._onRegistryChanged);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("vizlace-registry-changed", this._onRegistryChanged);
+    super.disconnectedCallback();
+  }
+
+  private _onRegistryChanged = () => this.requestUpdate();
+
   private _snap(v: number): number {
     if (this.dashboard.snapToGrid === false) return Math.round(v);
     const grid = this.dashboard.gridSize || DEFAULT_GRID;

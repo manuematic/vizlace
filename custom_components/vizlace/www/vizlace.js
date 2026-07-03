@@ -630,12 +630,47 @@ async function wsDashboardSave(hass, dashboard) {
 async function wsDashboardDelete(hass, id) {
   await hass.callWS({ type: "vizlace/dashboard/delete", dashboard_id: id });
 }
+async function wsPluginsList(hass) {
+  return hass.callWS({ type: "vizlace/plugins/list" });
+}
+async function wsPluginUpload(hass, filename, code) {
+  return hass.callWS({
+    type: "vizlace/plugins/upload",
+    filename,
+    code
+  });
+}
+async function wsPluginDelete(hass, id) {
+  await hass.callWS({ type: "vizlace/plugins/delete", plugin_id: id });
+}
+const loadedIds = /* @__PURE__ */ new Set();
+async function loadPlugins(hass) {
+  const { plugins } = await wsPluginsList(hass);
+  for (const plugin of plugins) {
+    if (loadedIds.has(plugin.id)) continue;
+    loadedIds.add(plugin.id);
+    const url = URL.createObjectURL(
+      new Blob([plugin.code], { type: "application/javascript" })
+    );
+    try {
+      await import(
+        /* @vite-ignore */
+        url
+      );
+    } catch (err) {
+      console.error(`Vizlace: failed to load plugin "${plugin.filename}"`, err);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+}
 class ElementRegistry {
   constructor() {
     this.elements = /* @__PURE__ */ new Map();
   }
   register(def) {
     this.elements.set(def.type, def);
+    window.dispatchEvent(new CustomEvent("vizlace-registry-changed"));
   }
   get(type) {
     return this.elements.get(type);
@@ -701,13 +736,13 @@ const n2 = "important", i3 = " !" + n2, o = e(class extends i$1 {
     return E;
   }
 });
-var __defProp$5 = Object.defineProperty;
-var __decorateClass$5 = (decorators, target, key, kind) => {
+var __defProp$6 = Object.defineProperty;
+var __decorateClass$6 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
     if (decorator = decorators[i4])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$5(target, key, result);
+  if (result) __defProp$6(target, key, result);
   return result;
 };
 const DEFAULT_GRID = 10;
@@ -720,6 +755,7 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
     this.selectedId = null;
     this.drag = null;
     this.resize = null;
+    this._onRegistryChanged = () => this.requestUpdate();
     this._onPointerMove = (e2) => {
       if (this.drag) {
         const dx = e2.clientX - this.drag.startX;
@@ -775,6 +811,14 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
       this.resize = null;
       window.removeEventListener("pointermove", this._onPointerMove);
     };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("vizlace-registry-changed", this._onRegistryChanged);
+  }
+  disconnectedCallback() {
+    window.removeEventListener("vizlace-registry-changed", this._onRegistryChanged);
+    super.disconnectedCallback();
   }
   _snap(v2) {
     if (this.dashboard.snapToGrid === false) return Math.round(v2);
@@ -1029,17 +1073,29 @@ _VizlaceEditorCanvas.styles = i$5`
     .handle.w  { top: calc(50% - 5px); left: -5px; cursor: w-resize; }
   `;
 let VizlaceEditorCanvas = _VizlaceEditorCanvas;
-__decorateClass$5([
+__decorateClass$6([
   n$1({ attribute: false })
 ], VizlaceEditorCanvas.prototype, "dashboard");
-__decorateClass$5([
+__decorateClass$6([
   n$1({ attribute: false })
 ], VizlaceEditorCanvas.prototype, "hass");
-__decorateClass$5([
+__decorateClass$6([
   r()
 ], VizlaceEditorCanvas.prototype, "selectedId");
 customElements.define("vizlace-editor-canvas", VizlaceEditorCanvas);
 const _VizlaceEditorToolbar = class _VizlaceEditorToolbar extends i$2 {
+  constructor() {
+    super(...arguments);
+    this._onRegistryChanged = () => this.requestUpdate();
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("vizlace-registry-changed", this._onRegistryChanged);
+  }
+  disconnectedCallback() {
+    window.removeEventListener("vizlace-registry-changed", this._onRegistryChanged);
+    super.disconnectedCallback();
+  }
   render() {
     const elements = registry.getAll();
     return b`
@@ -1112,13 +1168,13 @@ _VizlaceEditorToolbar.styles = i$5`
   `;
 let VizlaceEditorToolbar = _VizlaceEditorToolbar;
 customElements.define("vizlace-editor-toolbar", VizlaceEditorToolbar);
-var __defProp$4 = Object.defineProperty;
-var __decorateClass$4 = (decorators, target, key, kind) => {
+var __defProp$5 = Object.defineProperty;
+var __decorateClass$5 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
     if (decorator = decorators[i4])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$4(target, key, result);
+  if (result) __defProp$5(target, key, result);
   return result;
 };
 const _VizlaceEntityPicker = class _VizlaceEntityPicker extends i$2 {
@@ -1283,32 +1339,32 @@ _VizlaceEntityPicker.styles = i$5`
     }
   `;
 let VizlaceEntityPicker = _VizlaceEntityPicker;
-__decorateClass$4([
+__decorateClass$5([
   n$1({ attribute: false })
 ], VizlaceEntityPicker.prototype, "hass");
-__decorateClass$4([
+__decorateClass$5([
   n$1()
 ], VizlaceEntityPicker.prototype, "value");
-__decorateClass$4([
+__decorateClass$5([
   r()
 ], VizlaceEntityPicker.prototype, "open");
-__decorateClass$4([
+__decorateClass$5([
   r()
 ], VizlaceEntityPicker.prototype, "queryText");
-__decorateClass$4([
+__decorateClass$5([
   r()
 ], VizlaceEntityPicker.prototype, "activeIndex");
-__decorateClass$4([
+__decorateClass$5([
   e$1("input")
 ], VizlaceEntityPicker.prototype, "inputEl");
 customElements.define("vizlace-entity-picker", VizlaceEntityPicker);
-var __defProp$3 = Object.defineProperty;
-var __decorateClass$3 = (decorators, target, key, kind) => {
+var __defProp$4 = Object.defineProperty;
+var __decorateClass$4 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
     if (decorator = decorators[i4])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$3(target, key, result);
+  if (result) __defProp$4(target, key, result);
   return result;
 };
 const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
@@ -1649,23 +1705,23 @@ _VizlaceEditorInspector.styles = i$5`
     }
   `;
 let VizlaceEditorInspector = _VizlaceEditorInspector;
-__decorateClass$3([
+__decorateClass$4([
   n$1({ attribute: false })
 ], VizlaceEditorInspector.prototype, "element");
-__decorateClass$3([
+__decorateClass$4([
   n$1({ attribute: false })
 ], VizlaceEditorInspector.prototype, "hass");
-__decorateClass$3([
+__decorateClass$4([
   n$1({ attribute: false })
 ], VizlaceEditorInspector.prototype, "dashboard");
 customElements.define("vizlace-editor-inspector", VizlaceEditorInspector);
-var __defProp$2 = Object.defineProperty;
-var __decorateClass$2 = (decorators, target, key, kind) => {
+var __defProp$3 = Object.defineProperty;
+var __decorateClass$3 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
     if (decorator = decorators[i4])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$2(target, key, result);
+  if (result) __defProp$3(target, key, result);
   return result;
 };
 const _VizlaceEditor = class _VizlaceEditor extends i$2 {
@@ -1855,35 +1911,47 @@ _VizlaceEditor.styles = i$5`
     }
   `;
 let VizlaceEditor = _VizlaceEditor;
-__decorateClass$2([
+__decorateClass$3([
   n$1({ attribute: false })
 ], VizlaceEditor.prototype, "hass");
-__decorateClass$2([
+__decorateClass$3([
   n$1({ attribute: false })
 ], VizlaceEditor.prototype, "dashboard");
-__decorateClass$2([
+__decorateClass$3([
   r()
 ], VizlaceEditor.prototype, "saving");
-__decorateClass$2([
+__decorateClass$3([
   r()
 ], VizlaceEditor.prototype, "saveStatus");
-__decorateClass$2([
+__decorateClass$3([
   r()
 ], VizlaceEditor.prototype, "selectedElement");
-__decorateClass$2([
+__decorateClass$3([
   e$1("vizlace-editor-canvas")
 ], VizlaceEditor.prototype, "canvasEl");
 customElements.define("vizlace-editor", VizlaceEditor);
-var __defProp$1 = Object.defineProperty;
-var __decorateClass$1 = (decorators, target, key, kind) => {
+var __defProp$2 = Object.defineProperty;
+var __decorateClass$2 = (decorators, target, key, kind) => {
   var result = void 0;
   for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
     if (decorator = decorators[i4])
       result = decorator(target, key, result) || result;
-  if (result) __defProp$1(target, key, result);
+  if (result) __defProp$2(target, key, result);
   return result;
 };
 const _VizlaceViewerCanvas = class _VizlaceViewerCanvas extends i$2 {
+  constructor() {
+    super(...arguments);
+    this._onRegistryChanged = () => this.requestUpdate();
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("vizlace-registry-changed", this._onRegistryChanged);
+  }
+  disconnectedCallback() {
+    window.removeEventListener("vizlace-registry-changed", this._onRegistryChanged);
+    super.disconnectedCallback();
+  }
   render() {
     if (!this.dashboard) return A;
     const bg = this.dashboard.background;
@@ -1942,13 +2010,252 @@ _VizlaceViewerCanvas.styles = i$5`
     }
   `;
 let VizlaceViewerCanvas = _VizlaceViewerCanvas;
-__decorateClass$1([
+__decorateClass$2([
   n$1({ attribute: false })
 ], VizlaceViewerCanvas.prototype, "dashboard");
-__decorateClass$1([
+__decorateClass$2([
   n$1({ attribute: false })
 ], VizlaceViewerCanvas.prototype, "hass");
 customElements.define("vizlace-viewer-canvas", VizlaceViewerCanvas);
+var __defProp$1 = Object.defineProperty;
+var __decorateClass$1 = (decorators, target, key, kind) => {
+  var result = void 0;
+  for (var i4 = decorators.length - 1, decorator; i4 >= 0; i4--)
+    if (decorator = decorators[i4])
+      result = decorator(target, key, result) || result;
+  if (result) __defProp$1(target, key, result);
+  return result;
+};
+const _VizlacePluginManager = class _VizlacePluginManager extends i$2 {
+  constructor() {
+    super(...arguments);
+    this.plugins = [];
+    this.loading = false;
+    this.uploadError = null;
+    this._onFileChange = async (e2) => {
+      var _a2;
+      const input = e2.target;
+      const file = (_a2 = input.files) == null ? void 0 : _a2[0];
+      input.value = "";
+      if (!file) return;
+      this.uploadError = null;
+      try {
+        const code = await file.text();
+        await wsPluginUpload(this.hass, file.name, code);
+        await this._load();
+      } catch (err) {
+        this.uploadError = err instanceof Error ? err.message : "Upload fehlgeschlagen";
+      }
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    this._load();
+  }
+  async _load() {
+    this.loading = true;
+    try {
+      const res = await wsPluginsList(this.hass);
+      this.plugins = res.plugins;
+    } finally {
+      this.loading = false;
+    }
+  }
+  async _delete(plugin) {
+    if (!confirm(
+      `Plugin "${plugin.filename}" wirklich entfernen? Elemente, die es bereitstellt, verschwinden aus der Toolbox (bereits platzierte Instanzen auf Dashboards bleiben als "Unknown" stehen).`
+    ))
+      return;
+    await wsPluginDelete(this.hass, plugin.id);
+    this.plugins = this.plugins.filter((p2) => p2.id !== plugin.id);
+  }
+  _back() {
+    this.dispatchEvent(
+      new CustomEvent("navigate-back", { bubbles: true, composed: true })
+    );
+  }
+  render() {
+    var _a2, _b;
+    const isAdmin = Boolean((_b = (_a2 = this.hass) == null ? void 0 : _a2.user) == null ? void 0 : _b.is_admin);
+    return b`
+      <div class="header">
+        <button class="btn-back" @click=${this._back}>← Zurück</button>
+        <h1>Plugins</h1>
+      </div>
+
+      <div class="warning">
+        ⚠️ Plugins sind JavaScript-Dateien, die mit vollem Zugriff auf deine
+        Home-Assistant-Entities und -Services laufen. Installiere nur Plugins
+        aus vertrauenswürdigen Quellen.
+      </div>
+
+      ${isAdmin ? b`
+            <div class="upload-row">
+              <label class="btn-upload">
+                + Plugin hochladen (.js)
+                <input
+                  type="file"
+                  accept=".js,application/javascript"
+                  hidden
+                  @change=${this._onFileChange}
+                />
+              </label>
+              ${this.uploadError ? b`<span class="upload-error">${this.uploadError}</span>` : A}
+            </div>
+          ` : b`
+            <div class="readonly-note">
+              Nur Administratoren können Plugins installieren oder entfernen.
+            </div>
+          `}
+      ${this.loading ? b`<div class="loading">Lädt…</div>` : this.plugins.length === 0 ? b`<div class="empty">Noch keine Plugins installiert.</div>` : b`
+            <div class="plugin-list">
+              ${this.plugins.map(
+      (p2) => b`
+                  <div class="plugin-card">
+                    <div class="plugin-name">${p2.filename}</div>
+                    <div class="plugin-meta">
+                      Installiert: ${new Date(p2.installed_at).toLocaleString()}
+                    </div>
+                    ${isAdmin ? b`
+                          <button
+                            class="btn-delete"
+                            @click=${() => this._delete(p2)}
+                          >
+                            Entfernen
+                          </button>
+                        ` : A}
+                  </div>
+                `
+    )}
+            </div>
+          `}
+    `;
+  }
+};
+_VizlacePluginManager.styles = i$5`
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: var(--primary-background-color, #121212);
+      color: var(--primary-text-color, #fff);
+      overflow-y: auto;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px;
+      background: var(--app-header-background-color, #1a1a2e);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .btn-back {
+      padding: 6px 14px;
+      border-radius: 5px;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--primary-text-color, #fff);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .warning {
+      margin: 20px 24px 0;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: rgba(255, 152, 0, 0.15);
+      border: 1px solid rgba(255, 152, 0, 0.4);
+      color: #ffb74d;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .upload-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 24px;
+    }
+    .btn-upload {
+      display: inline-block;
+      padding: 8px 18px;
+      border-radius: 6px;
+      background: var(--primary-color, #03a9f4);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .upload-error {
+      color: #f44336;
+      font-size: 13px;
+    }
+    .readonly-note {
+      margin: 16px 24px;
+      font-size: 13px;
+      color: var(--secondary-text-color, #aaa);
+    }
+    .plugin-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+      padding: 8px 24px 24px;
+    }
+    .plugin-card {
+      background: var(--ha-card-background, rgba(255, 255, 255, 0.05));
+      border-radius: 10px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .plugin-name {
+      font-size: 14px;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .plugin-meta {
+      font-size: 11px;
+      color: var(--secondary-text-color, #aaa);
+      margin-top: 6px;
+    }
+    .btn-delete {
+      margin-top: 12px;
+      width: 100%;
+      padding: 6px 0;
+      border-radius: 4px;
+      border: 1px solid rgba(244, 67, 54, 0.4);
+      background: rgba(244, 67, 54, 0.15);
+      color: #f44336;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-delete:hover {
+      background: rgba(244, 67, 54, 0.3);
+    }
+    .empty,
+    .loading {
+      padding: 40px 24px;
+      text-align: center;
+      color: var(--secondary-text-color, #aaa);
+    }
+  `;
+let VizlacePluginManager = _VizlacePluginManager;
+__decorateClass$1([
+  n$1({ attribute: false })
+], VizlacePluginManager.prototype, "hass");
+__decorateClass$1([
+  r()
+], VizlacePluginManager.prototype, "plugins");
+__decorateClass$1([
+  r()
+], VizlacePluginManager.prototype, "loading");
+__decorateClass$1([
+  r()
+], VizlacePluginManager.prototype, "uploadError");
+customElements.define("vizlace-plugin-manager", VizlacePluginManager);
 var __defProp = Object.defineProperty;
 var __decorateClass = (decorators, target, key, kind) => {
   var result = void 0;
@@ -1970,6 +2277,7 @@ const _VizlacePanel = class _VizlacePanel extends i$2 {
   connectedCallback() {
     super.connectedCallback();
     this._loadList();
+    loadPlugins(this.hass);
   }
   async _loadList() {
     this.loading = true;
@@ -2019,12 +2327,24 @@ const _VizlacePanel = class _VizlacePanel extends i$2 {
     this._loadList();
   }
   _renderList() {
+    var _a2, _b;
     return b`
       <div class="list-header">
         <h1>Vizlace Dashboards</h1>
-        <button class="btn-new" @click=${() => this._openEdit(null)}>
-          + New Dashboard
-        </button>
+        <div style="display:flex;gap:8px;">
+          ${((_b = (_a2 = this.hass) == null ? void 0 : _a2.user) == null ? void 0 : _b.is_admin) ? b`
+                <button
+                  class="card-btn"
+                  style="flex:none;padding:8px 14px;"
+                  @click=${() => this.view = { mode: "plugins" }}
+                >
+                  Plugins
+                </button>
+              ` : A}
+          <button class="btn-new" @click=${() => this._openEdit(null)}>
+            + New Dashboard
+          </button>
+        </div>
       </div>
 
       ${this.loading ? b`<div class="loading">Loading…</div>` : this.dashboards.length === 0 ? b`
@@ -2109,6 +2429,14 @@ const _VizlacePanel = class _VizlacePanel extends i$2 {
     if (mode === "list") return this._renderList();
     if (mode === "view") return this._renderViewer();
     if (mode === "edit") return this._renderEditor();
+    if (mode === "plugins") {
+      return b`
+        <vizlace-plugin-manager
+          .hass=${this.hass}
+          @navigate-back=${this._backToList}
+        ></vizlace-plugin-manager>
+      `;
+    }
     return A;
   }
 };
@@ -3056,3 +3384,4 @@ const frameDef = {
   }
 };
 registry.register(frameDef);
+window.lit = { html: b, svg: w };

@@ -1,4 +1,4 @@
-"""Storage helper for Vizlace dashboards."""
+"""Storage helper for Vizlace dashboards and plugins."""
 from __future__ import annotations
 
 import uuid
@@ -6,10 +6,12 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, STORAGE_VERSION
 
 _INDEX_KEY = f"{DOMAIN}.index"
+_PLUGINS_KEY = f"{DOMAIN}.plugins"
 
 
 class VizlaceStorage:
@@ -25,10 +27,19 @@ class VizlaceStorage:
         # per-dashboard stores cached by id
         self._stores: dict[str, Store[dict[str, Any]]] = {}
 
+        self._plugins_store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, _PLUGINS_KEY
+        )
+        # plugins: {id -> {id, filename, code, installed_at}}
+        self._plugins: dict[str, dict[str, Any]] = {}
+
     async def async_load(self) -> None:
         data = await self._index_store.async_load()
         if data:
             self._index = data
+        plugin_data = await self._plugins_store.async_load()
+        if plugin_data:
+            self._plugins = plugin_data
 
     def _dashboard_store(self, dashboard_id: str) -> Store[dict[str, Any]]:
         if dashboard_id not in self._stores:
@@ -82,4 +93,29 @@ class VizlaceStorage:
         store = self._dashboard_store(dashboard_id)
         await store.async_remove()
         self._stores.pop(dashboard_id, None)
+        return True
+
+    async def async_get_plugins(self) -> list[dict[str, Any]]:
+        """Return all installed community plugins, including their code."""
+        return list(self._plugins.values())
+
+    async def async_save_plugin(self, filename: str, code: str) -> dict[str, Any]:
+        """Store a new community plugin. Always assigns a fresh id."""
+        plugin_id = uuid.uuid4().hex
+        plugin = {
+            "id": plugin_id,
+            "filename": filename,
+            "code": code,
+            "installed_at": dt_util.utcnow().isoformat(),
+        }
+        self._plugins[plugin_id] = plugin
+        await self._plugins_store.async_save(self._plugins)
+        return plugin
+
+    async def async_delete_plugin(self, plugin_id: str) -> bool:
+        """Delete a plugin. Returns True if it existed."""
+        if plugin_id not in self._plugins:
+            return False
+        del self._plugins[plugin_id]
+        await self._plugins_store.async_save(self._plugins)
         return True

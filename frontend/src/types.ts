@@ -36,6 +36,13 @@ export interface ConfigField {
   step?: number;
 }
 
+export interface PluginRecord {
+  id: string;
+  filename: string;
+  code: string;
+  installed_at: string;
+}
+
 export interface VizlaceElementDefinition {
   type: string;
   label: string;

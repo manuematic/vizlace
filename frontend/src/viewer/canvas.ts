@@ -29,6 +29,18 @@ export class VizlaceViewerCanvas extends LitElement {
   @property({ attribute: false }) dashboard!: Dashboard;
   @property({ attribute: false }) hass!: HomeAssistant;
 
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("vizlace-registry-changed", this._onRegistryChanged);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("vizlace-registry-changed", this._onRegistryChanged);
+    super.disconnectedCallback();
+  }
+
+  private _onRegistryChanged = () => this.requestUpdate();
+
   render() {
     if (!this.dashboard) return nothing;
 

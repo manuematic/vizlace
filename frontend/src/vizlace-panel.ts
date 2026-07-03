@@ -7,13 +7,16 @@ import {
   wsDashboardDelete,
   wsDashboardSave,
 } from "./ha/websocket";
+import { loadPlugins } from "./plugins/loader";
 import "./editor/index";
 import "./viewer/canvas";
+import "./plugins/manager";
 
 type View =
   | { mode: "list" }
   | { mode: "view"; dashboardId: string }
-  | { mode: "edit"; dashboardId: string | null };
+  | { mode: "edit"; dashboardId: string | null }
+  | { mode: "plugins" };
 
 export class VizlacePanel extends LitElement {
   static styles = css`
@@ -166,6 +169,7 @@ export class VizlacePanel extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this._loadList();
+    loadPlugins(this.hass);
   }
 
   private async _loadList() {
@@ -224,9 +228,22 @@ export class VizlacePanel extends LitElement {
     return html`
       <div class="list-header">
         <h1>Vizlace Dashboards</h1>
-        <button class="btn-new" @click=${() => this._openEdit(null)}>
-          + New Dashboard
-        </button>
+        <div style="display:flex;gap:8px;">
+          ${this.hass?.user?.is_admin
+            ? html`
+                <button
+                  class="card-btn"
+                  style="flex:none;padding:8px 14px;"
+                  @click=${() => (this.view = { mode: "plugins" })}
+                >
+                  Plugins
+                </button>
+              `
+            : nothing}
+          <button class="btn-new" @click=${() => this._openEdit(null)}>
+            + New Dashboard
+          </button>
+        </div>
       </div>
 
       ${this.loading
@@ -319,6 +336,14 @@ export class VizlacePanel extends LitElement {
     if (mode === "list") return this._renderList();
     if (mode === "view") return this._renderViewer();
     if (mode === "edit") return this._renderEditor();
+    if (mode === "plugins") {
+      return html`
+        <vizlace-plugin-manager
+          .hass=${this.hass}
+          @navigate-back=${this._backToList}
+        ></vizlace-plugin-manager>
+      `;
+    }
     return nothing;
   }
 }

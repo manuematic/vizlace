@@ -45,6 +45,18 @@ export class VizlaceEditorToolbar extends LitElement {
     }
   `;
 
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("vizlace-registry-changed", this._onRegistryChanged);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("vizlace-registry-changed", this._onRegistryChanged);
+    super.disconnectedCallback();
+  }
+
+  private _onRegistryChanged = () => this.requestUpdate();
+
   render() {
     const elements = registry.getAll();
     return html`

@@ -5,6 +5,9 @@ class ElementRegistry {
 
   register(def: VizlaceElementDefinition): void {
     this.elements.set(def.type, def);
+    // Plugins can register after toolbar/canvas have already rendered
+    // (they load over WS, async) - this lets them pick the new type up.
+    window.dispatchEvent(new CustomEvent("vizlace-registry-changed"));
   }
 
   get(type: string): VizlaceElementDefinition | undefined {
