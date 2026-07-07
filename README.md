@@ -189,6 +189,10 @@ All commands are prefixed `vizlace/`.
 
 > Note: id params are named `dashboard_id` / `plugin_id`, never `id` — the top-level `id` field on every HA WebSocket message is reserved for the framework's own request/response correlation number and gets overwritten if reused.
 
+## Credits
+
+This integration was built with the help of Claude AI (Anthropic).
+
 ## License
 
 MIT

@@ -1,7 +1,12 @@
 import { html } from "lit";
 import type { VizlaceElementDefinition } from "../types";
 import { registry } from "./registry";
-import { styleConfigField, getStyle, trackColor } from "./styles";
+import {
+  styleConfigField,
+  getStyle,
+  controlBackground,
+  controlBorder,
+} from "./styles";
 
 const slideToggleDef: VizlaceElementDefinition = {
   type: "slide-toggle",
@@ -40,7 +45,7 @@ const slideToggleDef: VizlaceElementDefinition = {
     const offColor = String(cfg.off_color ?? "#757575");
     const knobColor = String(cfg.knob_color ?? "#ffffff");
     const style = getStyle(cfg);
-    const track = trackColor(style);
+    const radius = style === "mondrian" ? "0" : "999px";
 
     const isOn = state ? state.state === "on" || state.state === "true" : false;
     const trackColorValue = isOn ? onColor : offColor;
@@ -64,9 +69,11 @@ const slideToggleDef: VizlaceElementDefinition = {
             width:90%;
             height:70%;
             max-height:36px;
-            border-radius:999px;
-            background:${trackColorValue};
-            box-shadow:inset 0 1px 3px rgba(0,0,0,0.4), 0 0 0 2px ${track};
+            box-sizing:border-box;
+            border-radius:${radius};
+            background:${controlBackground(style, trackColorValue)};
+            border:${controlBorder(style)};
+            box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);
             cursor:pointer;
             transition:background 0.2s;
           "
@@ -78,8 +85,9 @@ const slideToggleDef: VizlaceElementDefinition = {
               bottom:2px;
               width:calc(50% - 2px);
               left:${isOn ? "calc(50% + 0px)" : "2px"};
-              border-radius:999px;
-              background:${knobColor};
+              border-radius:${radius};
+              background:${controlBackground(style, knobColor)};
+              border:${style === "mondrian" ? "3px solid #111" : "none"};
               box-shadow:0 1px 3px rgba(0,0,0,0.5);
               transition:left 0.18s ease;
             "

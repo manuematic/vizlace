@@ -79,6 +79,7 @@ const valueSliderDef: VizlaceElementDefinition = {
     const step = Number(cfg.step ?? 1) || 1;
     const unit = String(cfg.unit ?? "");
     const orientation = cfg.orientation === "horizontal" ? "horizontal" : "vertical";
+    const isVertical = orientation === "vertical";
     const color = String(cfg.color ?? "#03a9f4");
     const domain = String(cfg.service_domain ?? "input_number");
     const service = String(cfg.service_name ?? "set_value");
@@ -93,8 +94,8 @@ const valueSliderDef: VizlaceElementDefinition = {
     const pct = max > min ? (value - min) / (max - min) : 0;
 
     const applyPct = (
-      trackEl: HTMLElement,
       fillEl: HTMLElement,
+      knobEl: HTMLElement,
       textEl: HTMLElement,
       p: number
     ) => {
@@ -103,10 +104,12 @@ const valueSliderDef: VizlaceElementDefinition = {
       const stepped = Math.round(rawValue / step) * step;
       const finalValue = Math.min(max, Math.max(min, stepped));
       const finalPct = max > min ? (finalValue - min) / (max - min) : 0;
-      if (orientation === "vertical") {
+      if (isVertical) {
         fillEl.style.height = `${finalPct * 100}%`;
+        knobEl.style.bottom = `${finalPct * 100}%`;
       } else {
         fillEl.style.width = `${finalPct * 100}%`;
+        knobEl.style.left = `${finalPct * 100}%`;
       }
       textEl.textContent = `${formatValue(finalValue, step)}${unit}`;
       return finalValue;
@@ -117,22 +120,24 @@ const valueSliderDef: VizlaceElementDefinition = {
       e.stopPropagation();
       if (!config.entity_id) return;
       const trackEl = e.currentTarget as HTMLElement;
+      const rootEl = trackEl.closest(".vs-root") as HTMLElement;
       const fillEl = trackEl.querySelector(".vs-fill") as HTMLElement;
-      const textEl = trackEl.querySelector(".vs-value") as HTMLElement;
+      const knobEl = trackEl.querySelector(".vs-knob") as HTMLElement;
+      const textEl = rootEl.querySelector(".vs-value") as HTMLElement;
       trackEl.setPointerCapture(e.pointerId);
 
       const pctFromEvent = (ev: PointerEvent): number => {
         const rect = trackEl.getBoundingClientRect();
-        if (orientation === "vertical") {
+        if (isVertical) {
           return 1 - (ev.clientY - rect.top) / rect.height;
         }
         return (ev.clientX - rect.left) / rect.width;
       };
 
-      let finalValue = applyPct(trackEl, fillEl, textEl, pctFromEvent(e));
+      let finalValue = applyPct(fillEl, knobEl, textEl, pctFromEvent(e));
 
       const onMove = (ev: PointerEvent) => {
-        finalValue = applyPct(trackEl, fillEl, textEl, pctFromEvent(ev));
+        finalValue = applyPct(fillEl, knobEl, textEl, pctFromEvent(ev));
       };
       const onUp = () => {
         trackEl.removeEventListener("pointermove", onMove);
@@ -148,13 +153,17 @@ const valueSliderDef: VizlaceElementDefinition = {
       trackEl.addEventListener("pointercancel", onUp, { once: true });
     };
 
-    const fillStyle =
-      orientation === "vertical"
-        ? `position:absolute;left:0;right:0;bottom:0;height:${pct * 100}%;background:${color};`
-        : `position:absolute;top:0;bottom:0;left:0;width:${pct * 100}%;background:${color};`;
+    const fillStyle = isVertical
+      ? `position:absolute;left:0;right:0;bottom:0;height:${pct * 100}%;background:${color};border-radius:999px;`
+      : `position:absolute;top:0;bottom:0;left:0;width:${pct * 100}%;background:${color};border-radius:999px;`;
+
+    const knobStyle = isVertical
+      ? `position:absolute;left:50%;bottom:${pct * 100}%;transform:translate(-50%,50%);width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 3px rgba(0,0,0,0.5);`
+      : `position:absolute;top:50%;left:${pct * 100}%;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 3px rgba(0,0,0,0.5);`;
 
     return html`
       <div
+        class="vs-root"
         style="
           width:100%;height:100%;
           display:flex;flex-direction:column;align-items:center;justify-content:space-between;
@@ -167,21 +176,26 @@ const valueSliderDef: VizlaceElementDefinition = {
           ? html`<div style="font-size:11px;color:${fgMuted};">${label}</div>`
           : ""}
         <div
-          class="vs-track"
-          @pointerdown=${handlePointerDown}
           style="
-            position:relative;
-            flex:1;
-            width:${orientation === "vertical" ? "40%" : "100%"};
-            min-height:0;
-            border-radius:6px;
-            background:${track};
-            cursor:pointer;
-            touch-action:none;
-            overflow:hidden;
+            flex:1;width:100%;min-height:0;min-width:0;
+            display:flex;align-items:center;justify-content:center;
           "
         >
-          <div class="vs-fill" style=${fillStyle}></div>
+          <div
+            class="vs-track"
+            @pointerdown=${handlePointerDown}
+            style="
+              position:relative;
+              ${isVertical ? "width:14px;height:100%;" : "width:100%;height:14px;"}
+              border-radius:999px;
+              background:${track};
+              cursor:pointer;
+              touch-action:none;
+            "
+          >
+            <div class="vs-fill" style=${fillStyle}></div>
+            <div class="vs-knob" style=${knobStyle}></div>
+          </div>
         </div>
         <div class="vs-value" style="font-size:13px;font-weight:bold;color:${fg};">
           ${formatValue(value, step)}${unit}

@@ -3616,7 +3616,7 @@ const slideToggleDef = {
     const offColor = String(cfg.off_color ?? "#757575");
     const knobColor = String(cfg.knob_color ?? "#ffffff");
     const style = getStyle(cfg);
-    const track = trackColor(style);
+    const radius = style === "mondrian" ? "0" : "999px";
     const isOn = state ? state.state === "on" || state.state === "true" : false;
     const trackColorValue = isOn ? onColor : offColor;
     const handleClick = (e2) => {
@@ -3637,9 +3637,11 @@ const slideToggleDef = {
             width:90%;
             height:70%;
             max-height:36px;
-            border-radius:999px;
-            background:${trackColorValue};
-            box-shadow:inset 0 1px 3px rgba(0,0,0,0.4), 0 0 0 2px ${track};
+            box-sizing:border-box;
+            border-radius:${radius};
+            background:${controlBackground(style, trackColorValue)};
+            border:${controlBorder(style)};
+            box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);
             cursor:pointer;
             transition:background 0.2s;
           "
@@ -3651,8 +3653,9 @@ const slideToggleDef = {
               bottom:2px;
               width:calc(50% - 2px);
               left:${isOn ? "calc(50% + 0px)" : "2px"};
-              border-radius:999px;
-              background:${knobColor};
+              border-radius:${radius};
+              background:${controlBackground(style, knobColor)};
+              border:${style === "mondrian" ? "3px solid #111" : "none"};
               box-shadow:0 1px 3px rgba(0,0,0,0.5);
               transition:left 0.18s ease;
             "
@@ -3729,6 +3732,7 @@ const valueSliderDef = {
     const step = Number(cfg.step ?? 1) || 1;
     const unit = String(cfg.unit ?? "");
     const orientation = cfg.orientation === "horizontal" ? "horizontal" : "vertical";
+    const isVertical = orientation === "vertical";
     const color = String(cfg.color ?? "#03a9f4");
     const domain = String(cfg.service_domain ?? "input_number");
     const service = String(cfg.service_name ?? "set_value");
@@ -3740,16 +3744,18 @@ const valueSliderDef = {
     const raw = state ? parseFloat(state.state) : NaN;
     const value = isNaN(raw) ? min : Math.min(max, Math.max(min, raw));
     const pct = max > min ? (value - min) / (max - min) : 0;
-    const applyPct = (trackEl, fillEl, textEl, p2) => {
+    const applyPct = (fillEl, knobEl, textEl, p2) => {
       const clamped = Math.min(1, Math.max(0, p2));
       const rawValue = min + clamped * (max - min);
       const stepped = Math.round(rawValue / step) * step;
       const finalValue = Math.min(max, Math.max(min, stepped));
       const finalPct = max > min ? (finalValue - min) / (max - min) : 0;
-      if (orientation === "vertical") {
+      if (isVertical) {
         fillEl.style.height = `${finalPct * 100}%`;
+        knobEl.style.bottom = `${finalPct * 100}%`;
       } else {
         fillEl.style.width = `${finalPct * 100}%`;
+        knobEl.style.left = `${finalPct * 100}%`;
       }
       textEl.textContent = `${formatValue(finalValue, step)}${unit}`;
       return finalValue;
@@ -3759,19 +3765,21 @@ const valueSliderDef = {
       e2.stopPropagation();
       if (!config.entity_id) return;
       const trackEl = e2.currentTarget;
+      const rootEl = trackEl.closest(".vs-root");
       const fillEl = trackEl.querySelector(".vs-fill");
-      const textEl = trackEl.querySelector(".vs-value");
+      const knobEl = trackEl.querySelector(".vs-knob");
+      const textEl = rootEl.querySelector(".vs-value");
       trackEl.setPointerCapture(e2.pointerId);
       const pctFromEvent = (ev) => {
         const rect = trackEl.getBoundingClientRect();
-        if (orientation === "vertical") {
+        if (isVertical) {
           return 1 - (ev.clientY - rect.top) / rect.height;
         }
         return (ev.clientX - rect.left) / rect.width;
       };
-      let finalValue = applyPct(trackEl, fillEl, textEl, pctFromEvent(e2));
+      let finalValue = applyPct(fillEl, knobEl, textEl, pctFromEvent(e2));
       const onMove = (ev) => {
-        finalValue = applyPct(trackEl, fillEl, textEl, pctFromEvent(ev));
+        finalValue = applyPct(fillEl, knobEl, textEl, pctFromEvent(ev));
       };
       const onUp = () => {
         trackEl.removeEventListener("pointermove", onMove);
@@ -3786,9 +3794,11 @@ const valueSliderDef = {
       trackEl.addEventListener("pointerup", onUp, { once: true });
       trackEl.addEventListener("pointercancel", onUp, { once: true });
     };
-    const fillStyle = orientation === "vertical" ? `position:absolute;left:0;right:0;bottom:0;height:${pct * 100}%;background:${color};` : `position:absolute;top:0;bottom:0;left:0;width:${pct * 100}%;background:${color};`;
+    const fillStyle = isVertical ? `position:absolute;left:0;right:0;bottom:0;height:${pct * 100}%;background:${color};border-radius:999px;` : `position:absolute;top:0;bottom:0;left:0;width:${pct * 100}%;background:${color};border-radius:999px;`;
+    const knobStyle = isVertical ? `position:absolute;left:50%;bottom:${pct * 100}%;transform:translate(-50%,50%);width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 3px rgba(0,0,0,0.5);` : `position:absolute;top:50%;left:${pct * 100}%;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid ${color};box-shadow:0 1px 3px rgba(0,0,0,0.5);`;
     return b`
       <div
+        class="vs-root"
         style="
           width:100%;height:100%;
           display:flex;flex-direction:column;align-items:center;justify-content:space-between;
@@ -3799,21 +3809,26 @@ const valueSliderDef = {
       >
         ${label ? b`<div style="font-size:11px;color:${fgMuted};">${label}</div>` : ""}
         <div
-          class="vs-track"
-          @pointerdown=${handlePointerDown}
           style="
-            position:relative;
-            flex:1;
-            width:${orientation === "vertical" ? "40%" : "100%"};
-            min-height:0;
-            border-radius:6px;
-            background:${track};
-            cursor:pointer;
-            touch-action:none;
-            overflow:hidden;
+            flex:1;width:100%;min-height:0;min-width:0;
+            display:flex;align-items:center;justify-content:center;
           "
         >
-          <div class="vs-fill" style=${fillStyle}></div>
+          <div
+            class="vs-track"
+            @pointerdown=${handlePointerDown}
+            style="
+              position:relative;
+              ${isVertical ? "width:14px;height:100%;" : "width:100%;height:14px;"}
+              border-radius:999px;
+              background:${track};
+              cursor:pointer;
+              touch-action:none;
+            "
+          >
+            <div class="vs-fill" style=${fillStyle}></div>
+            <div class="vs-knob" style=${knobStyle}></div>
+          </div>
         </div>
         <div class="vs-value" style="font-size:13px;font-weight:bold;color:${fg};">
           ${formatValue(value, step)}${unit}
