@@ -745,6 +745,9 @@ var __decorateClass$6 = (decorators, target, key, kind) => {
   if (result) __defProp$6(target, key, result);
   return result;
 };
+function rectsIntersect(a2, b2) {
+  return a2.x < b2.x + b2.w && a2.x + a2.w > b2.x && a2.y < b2.y + b2.h && a2.y + a2.h > b2.y;
+}
 const DEFAULT_GRID = 10;
 const DEFAULT_CANVAS_WIDTH = 1600;
 const DEFAULT_CANVAS_HEIGHT = 900;
@@ -752,18 +755,55 @@ const RESOLUTION_MARGIN = 200;
 const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
   constructor() {
     super(...arguments);
-    this.selectedId = null;
+    this.selectedIds = [];
+    this.marqueeRect = null;
     this.drag = null;
     this.resize = null;
+    this.marqueeStart = null;
+    this.marqueeCanvasRect = null;
     this._onRegistryChanged = () => this.requestUpdate();
+    this._onMarqueeMove = (e2) => {
+      if (!this.marqueeStart || !this.marqueeCanvasRect) return;
+      const curX = e2.clientX - this.marqueeCanvasRect.left;
+      const curY = e2.clientY - this.marqueeCanvasRect.top;
+      const x2 = Math.min(this.marqueeStart.x, curX);
+      const y3 = Math.min(this.marqueeStart.y, curY);
+      const w2 = Math.abs(curX - this.marqueeStart.x);
+      const h2 = Math.abs(curY - this.marqueeStart.y);
+      this.marqueeRect = { x: x2, y: y3, w: w2, h: h2 };
+    };
+    this._onMarqueeUp = () => {
+      window.removeEventListener("pointermove", this._onMarqueeMove);
+      const rect = this.marqueeRect;
+      this.marqueeRect = null;
+      this.marqueeStart = null;
+      this.marqueeCanvasRect = null;
+      if (rect && (rect.w > 4 || rect.h > 4)) {
+        const ids = this.dashboard.elements.filter(
+          (el) => rectsIntersect(rect, { x: el.x, y: el.y, w: el.width, h: el.height })
+        ).map((el) => el.id);
+        this._setSelection(ids);
+      } else {
+        this._setSelection([]);
+      }
+    };
     this._onPointerMove = (e2) => {
       if (this.drag) {
-        const dx = e2.clientX - this.drag.startX;
-        const dy = e2.clientY - this.drag.startY;
-        this._updateElement(this.drag.elementId, {
-          x: this._snap(Math.max(0, this.drag.origX + dx)),
-          y: this._snap(Math.max(0, this.drag.origY + dy))
-        });
+        const origins = Object.values(this.drag.origins);
+        let dx = e2.clientX - this.drag.startX;
+        let dy = e2.clientY - this.drag.startY;
+        const minOrigX = Math.min(...origins.map((o2) => o2.x));
+        const minOrigY = Math.min(...origins.map((o2) => o2.y));
+        dx = Math.max(dx, -minOrigX);
+        dy = Math.max(dy, -minOrigY);
+        const patches = {};
+        for (const [id, origin] of Object.entries(this.drag.origins)) {
+          patches[id] = {
+            x: this._snap(origin.x + dx),
+            y: this._snap(origin.y + dy)
+          };
+        }
+        this._updateElements(patches);
       } else if (this.resize) {
         const r2 = this.resize;
         const dx = e2.clientX - r2.startX;
@@ -790,12 +830,9 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
     };
     this._onPointerUp = () => {
       if (this.drag) {
-        const el = this.dashboard.elements.find((e2) => e2.id === this.drag.elementId);
-        if (el) {
-          this.dispatchEvent(
-            new CustomEvent("element-moved", { detail: el, bubbles: true })
-          );
-        }
+        this.dispatchEvent(
+          new CustomEvent("element-moved", { bubbles: true })
+        );
       }
       if (this.resize) {
         const el = this.dashboard.elements.find(
@@ -825,22 +862,45 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
     const grid = this.dashboard.gridSize || DEFAULT_GRID;
     return Math.round(v2 / grid) * grid;
   }
+  _setSelection(ids) {
+    this.selectedIds = ids;
+    const elements = ids.map((id) => this.dashboard.elements.find((e2) => e2.id === id)).filter((e2) => !!e2);
+    this.dispatchEvent(
+      new CustomEvent("selection-changed", { detail: elements, bubbles: true })
+    );
+  }
   _onPointerDown(e2, el) {
     if (e2.target.classList.contains("handle")) return;
     e2.preventDefault();
-    this.selectedId = el.id;
-    this.dispatchEvent(
-      new CustomEvent("element-selected", { detail: el, bubbles: true })
-    );
-    this.drag = {
-      elementId: el.id,
-      startX: e2.clientX,
-      startY: e2.clientY,
-      origX: el.x,
-      origY: el.y
-    };
+    e2.stopPropagation();
+    if (e2.shiftKey) {
+      const set = new Set(this.selectedIds);
+      if (set.has(el.id)) set.delete(el.id);
+      else set.add(el.id);
+      this._setSelection([...set]);
+      return;
+    }
+    if (!this.selectedIds.includes(el.id)) {
+      const ids = el.groupId ? this.dashboard.elements.filter((e22) => e22.groupId === el.groupId).map((e22) => e22.id) : [el.id];
+      this._setSelection(ids);
+    }
+    const origins = {};
+    for (const id of this.selectedIds) {
+      const e22 = this.dashboard.elements.find((x2) => x2.id === id);
+      if (e22) origins[id] = { x: e22.x, y: e22.y };
+    }
+    this.drag = { startX: e2.clientX, startY: e2.clientY, origins };
     window.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("pointerup", this._onPointerUp, { once: true });
+  }
+  _onCanvasPointerDown(e2) {
+    if (e2.target !== e2.currentTarget) return;
+    e2.preventDefault();
+    const rect = e2.currentTarget.getBoundingClientRect();
+    this.marqueeCanvasRect = rect;
+    this.marqueeStart = { x: e2.clientX - rect.left, y: e2.clientY - rect.top };
+    window.addEventListener("pointermove", this._onMarqueeMove);
+    window.addEventListener("pointerup", this._onMarqueeUp, { once: true });
   }
   _onResizeHandleDown(e2, el, handle) {
     e2.preventDefault();
@@ -859,19 +919,14 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
     window.addEventListener("pointerup", this._onPointerUp, { once: true });
   }
   _updateElement(id, patch) {
+    this._updateElements({ [id]: patch });
+  }
+  _updateElements(patches) {
     const elements = this.dashboard.elements.map(
-      (el) => el.id === id ? { ...el, ...patch } : el
+      (el) => patches[el.id] ? { ...el, ...patches[el.id] } : el
     );
     this.dashboard = { ...this.dashboard, elements };
     this.requestUpdate();
-  }
-  _onCanvasClick(e2) {
-    if (e2.target === e2.currentTarget) {
-      this.selectedId = null;
-      this.dispatchEvent(
-        new CustomEvent("element-selected", { detail: null, bubbles: true })
-      );
-    }
   }
   _renderHandles(el) {
     const handles = [
@@ -914,8 +969,19 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
       minHeight: `${canvasHeight}px`,
       backgroundSize: `${gridSize}px ${gridSize}px`
     })}
-        @click=${this._onCanvasClick}
+        @pointerdown=${this._onCanvasPointerDown}
       >
+        ${this.marqueeRect ? b`
+              <div
+                class="marquee"
+                style=${o({
+      left: `${this.marqueeRect.x}px`,
+      top: `${this.marqueeRect.y}px`,
+      width: `${this.marqueeRect.w}px`,
+      height: `${this.marqueeRect.h}px`
+    })}
+              ></div>
+            ` : A}
         ${screenW && screenH ? b`
               <div
                 class="resolution-guide"
@@ -930,7 +996,7 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
         ${this.dashboard.elements.map((el) => {
       var _a2;
       const def = registry.get(el.type);
-      const selected = el.id === this.selectedId;
+      const selected = this.selectedIds.includes(el.id);
       const entityState = el.entity_id ? ((_a2 = this.hass) == null ? void 0 : _a2.states[el.entity_id]) ?? null : null;
       const isFrame = el.type === "frame";
       return b`
@@ -957,7 +1023,7 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
                       Unknown: ${el.type}
                     </div>`}
               </div>
-              ${selected ? this._renderHandles(el) : A}
+              ${selected && this.selectedIds.length === 1 ? this._renderHandles(el) : A}
             </div>
           `;
     })}
@@ -972,29 +1038,38 @@ const _VizlaceEditorCanvas = class _VizlaceEditorCanvas extends i$2 {
       ...this.dashboard,
       elements: [...this.dashboard.elements, el]
     };
-    this.selectedId = el.id;
-    this.dispatchEvent(
-      new CustomEvent("element-selected", { detail: el, bubbles: true })
-    );
+    this._setSelection([el.id]);
     this.requestUpdate();
   }
   updateSelectedElement(patch) {
-    if (!this.selectedId) return;
-    this._updateElement(this.selectedId, patch);
-    const el = this.dashboard.elements.find((e2) => e2.id === this.selectedId);
-    if (el) {
-      this.dispatchEvent(
-        new CustomEvent("element-selected", { detail: el, bubbles: true })
-      );
-    }
+    if (this.selectedIds.length !== 1) return;
+    const id = this.selectedIds[0];
+    this._updateElement(id, patch);
+    this._setSelection([id]);
   }
   deleteElement(id) {
     this.dashboard = {
       ...this.dashboard,
       elements: this.dashboard.elements.filter((e2) => e2.id !== id)
     };
-    if (this.selectedId === id) this.selectedId = null;
+    if (this.selectedIds.includes(id)) {
+      this._setSelection(this.selectedIds.filter((x2) => x2 !== id));
+    }
     this.requestUpdate();
+  }
+  groupElements(ids) {
+    if (ids.length < 2) return;
+    const groupId = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const patches = {};
+    for (const id of ids) patches[id] = { groupId };
+    this._updateElements(patches);
+    this._setSelection(ids);
+  }
+  ungroupElements(ids) {
+    const patches = {};
+    for (const id of ids) patches[id] = { groupId: void 0 };
+    this._updateElements(patches);
+    this._setSelection(ids);
   }
 };
 _VizlaceEditorCanvas.styles = i$5`
@@ -1071,6 +1146,13 @@ _VizlaceEditorCanvas.styles = i$5`
     .handle.s  { bottom: -5px; left: calc(50% - 5px); cursor: s-resize; }
     .handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
     .handle.w  { top: calc(50% - 5px); left: -5px; cursor: w-resize; }
+    .marquee {
+      position: absolute;
+      border: 1px dashed var(--primary-color, #03a9f4);
+      background: rgba(3, 169, 244, 0.15);
+      pointer-events: none;
+      z-index: 60;
+    }
   `;
 let VizlaceEditorCanvas = _VizlaceEditorCanvas;
 __decorateClass$6([
@@ -1081,7 +1163,10 @@ __decorateClass$6([
 ], VizlaceEditorCanvas.prototype, "hass");
 __decorateClass$6([
   r()
-], VizlaceEditorCanvas.prototype, "selectedId");
+], VizlaceEditorCanvas.prototype, "selectedIds");
+__decorateClass$6([
+  r()
+], VizlaceEditorCanvas.prototype, "marqueeRect");
 customElements.define("vizlace-editor-canvas", VizlaceEditorCanvas);
 const _VizlaceEditorToolbar = class _VizlaceEditorToolbar extends i$2 {
   constructor() {
@@ -1370,7 +1455,10 @@ var __decorateClass$4 = (decorators, target, key, kind) => {
 const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
   constructor() {
     super(...arguments);
-    this.element = null;
+    this.elements = [];
+  }
+  get element() {
+    return this.elements.length === 1 ? this.elements[0] : null;
   }
   _patch(patch) {
     if (!this.element) return;
@@ -1385,6 +1473,27 @@ const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
   _patchConfig(key, value) {
     if (!this.element) return;
     this._patch({ config: { ...this.element.config, [key]: value } });
+  }
+  _group() {
+    this.dispatchEvent(
+      new CustomEvent("group-elements", {
+        detail: this.elements.map((e2) => e2.id),
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+  _ungroup(ids) {
+    this.dispatchEvent(
+      new CustomEvent("ungroup-elements", {
+        detail: ids ?? this.elements.map((e2) => e2.id),
+        bubbles: true,
+        composed: true
+      })
+    );
+  }
+  _groupMemberIds(groupId) {
+    return this.dashboard.elements.filter((e2) => e2.groupId === groupId).map((e2) => e2.id);
   }
   _patchDashboard(patch) {
     this.dispatchEvent(
@@ -1462,14 +1571,53 @@ const _VizlaceEditorInspector = class _VizlaceEditorInspector extends i$2 {
       </div>
     `;
   }
+  _renderMultiSelection() {
+    const count = this.elements.length;
+    const groupIds = new Set(this.elements.map((e2) => e2.groupId));
+    const isExistingGroup = groupIds.size === 1 && this.elements.every((e2) => !!e2.groupId);
+    return b`
+      <h3>${count} Elements Selected</h3>
+      <div class="empty">
+        Shift-click elements or drag a selection box on the canvas to adjust
+        the selection.
+      </div>
+
+      <hr class="separator" />
+
+      ${isExistingGroup ? b`
+            <button class="btn-action" @click=${() => this._ungroup()}>
+              Ungroup
+            </button>
+          ` : b`
+            <button class="btn-action" @click=${this._group}>
+              Group (${count})
+            </button>
+          `}
+    `;
+  }
   render() {
-    if (!this.element) {
+    if (this.elements.length === 0) {
       return this._renderDashboardSettings();
+    }
+    if (this.elements.length > 1) {
+      return this._renderMultiSelection();
     }
     const el = this.element;
     const def = registry.get(el.type);
     return b`
       <h3>${(def == null ? void 0 : def.label) ?? el.type}</h3>
+      ${el.groupId ? b`
+            <div class="group-note">
+              Part of a group.
+              <button
+                class="btn-action"
+                @click=${() => this._ungroup(this._groupMemberIds(el.groupId))}
+              >
+                Ungroup
+              </button>
+            </div>
+            <hr class="separator" />
+          ` : A}
 
       <!-- Position & size -->
       <label>Position & Size</label>
@@ -1703,11 +1851,30 @@ _VizlaceEditorInspector.styles = i$5`
     .checkbox-row label {
       margin-bottom: 0;
     }
+    .btn-action {
+      width: 100%;
+      padding: 7px;
+      background: rgba(3, 169, 244, 0.15);
+      border: 1px solid rgba(3, 169, 244, 0.4);
+      border-radius: 4px;
+      color: var(--primary-color, #03a9f4);
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    .btn-action:hover {
+      background: rgba(3, 169, 244, 0.3);
+    }
+    .group-note {
+      font-size: 11px;
+      color: var(--secondary-text-color, #aaa);
+      margin-top: 8px;
+    }
   `;
 let VizlaceEditorInspector = _VizlaceEditorInspector;
 __decorateClass$4([
   n$1({ attribute: false })
-], VizlaceEditorInspector.prototype, "element");
+], VizlaceEditorInspector.prototype, "elements");
 __decorateClass$4([
   n$1({ attribute: false })
 ], VizlaceEditorInspector.prototype, "hass");
@@ -1729,7 +1896,7 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
     super(...arguments);
     this.saving = false;
     this.saveStatus = "";
-    this.selectedElement = null;
+    this.selectedElements = [];
   }
   async _save() {
     this.saving = true;
@@ -1771,23 +1938,31 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
     this.canvasEl.addElement(newEl);
     this._syncElements();
   }
-  _onElementSelected(e2) {
-    this.selectedElement = e2.detail;
+  _onSelectionChanged(e2) {
+    this.selectedElements = e2.detail;
   }
   _onElementChange(e2) {
     this.canvasEl.updateSelectedElement(e2.detail);
-    this.selectedElement = e2.detail;
+    this.selectedElements = [e2.detail];
     this._syncElements();
   }
   _onElementDelete(e2) {
     this.canvasEl.deleteElement(e2.detail);
-    this.selectedElement = null;
+    this.selectedElements = [];
     this._syncElements();
   }
   _onElementMoved() {
     this._syncElements();
   }
   _onElementResized() {
+    this._syncElements();
+  }
+  _onGroupElements(e2) {
+    this.canvasEl.groupElements(e2.detail);
+    this._syncElements();
+  }
+  _onUngroupElements(e2) {
+    this.canvasEl.ungroupElements(e2.detail);
     this._syncElements();
   }
   _onDashboardChange(e2) {
@@ -1830,12 +2005,14 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
       <div
         class="main"
         @add-element=${this._onAddElement}
-        @element-selected=${this._onElementSelected}
+        @selection-changed=${this._onSelectionChanged}
         @element-change=${this._onElementChange}
         @element-delete=${this._onElementDelete}
         @element-moved=${this._onElementMoved}
         @element-resized=${this._onElementResized}
         @dashboard-change=${this._onDashboardChange}
+        @group-elements=${this._onGroupElements}
+        @ungroup-elements=${this._onUngroupElements}
       >
         <vizlace-editor-toolbar></vizlace-editor-toolbar>
         <vizlace-editor-canvas
@@ -1843,7 +2020,7 @@ const _VizlaceEditor = class _VizlaceEditor extends i$2 {
           .hass=${this.hass}
         ></vizlace-editor-canvas>
         <vizlace-editor-inspector
-          .element=${this.selectedElement}
+          .elements=${this.selectedElements}
           .hass=${this.hass}
           .dashboard=${this.dashboard}
         ></vizlace-editor-inspector>
@@ -1925,7 +2102,7 @@ __decorateClass$3([
 ], VizlaceEditor.prototype, "saveStatus");
 __decorateClass$3([
   r()
-], VizlaceEditor.prototype, "selectedElement");
+], VizlaceEditor.prototype, "selectedElements");
 __decorateClass$3([
   e$1("vizlace-editor-canvas")
 ], VizlaceEditor.prototype, "canvasEl");
@@ -2615,12 +2792,14 @@ const styleConfigField = {
   options: [
     { value: "default", label: "Standard" },
     { value: "metallic", label: "Metallic" },
-    { value: "mondrian", label: "Mondrian" }
+    { value: "mondrian", label: "Mondrian" },
+    { value: "wood", label: "Wood" }
   ],
   default: "default"
 };
+const STYLES = ["metallic", "mondrian", "wood"];
 function getStyle(config) {
-  return config.style === "metallic" || config.style === "mondrian" ? config.style : "default";
+  return STYLES.includes(config.style) ? config.style : "default";
 }
 const METALLIC_BG = "linear-gradient(135deg, #9aa5ad 0%, #e2e8ec 22%, #6b7580 48%, #f2f5f7 58%, #7c8791 82%, #b7c1c8 100%)";
 const METALLIC_BORDER = "1px solid rgba(255,255,255,0.5)";
@@ -2628,6 +2807,9 @@ const METALLIC_SHADOW = "inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -2px 4px r
 const MONDRIAN_BG = "#f2f2ea";
 const MONDRIAN_BORDER = "5px solid #111";
 const MONDRIAN_COLORS = ["#d81e05", "#f7d716", "#0a4ea3"];
+const WOOD_BG = "repeating-linear-gradient(95deg, #8a5a2f 0px, #9c6b3a 3px, #7a4a22 6px, #8a5a2f 9px), linear-gradient(160deg, #ac7b45 0%, #7a4a22 100%)";
+const WOOD_BORDER = "3px solid #5c3a1a";
+const WOOD_SHADOW = "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -3px 6px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.35)";
 function mondrianAccent(type) {
   let h2 = 0;
   for (let i4 = 0; i4 < type.length; i4++) h2 = h2 * 31 + type.charCodeAt(i4) >>> 0;
@@ -2642,26 +2824,39 @@ function panelChromeCss(style, type) {
       type
     )};border-radius:0;`;
   }
+  if (style === "wood") {
+    return `background:${WOOD_BG};border:${WOOD_BORDER};box-shadow:${WOOD_SHADOW};border-radius:8px;`;
+  }
   return "";
 }
 function fgColor(style) {
-  return style === "default" ? "var(--primary-text-color,#fff)" : "#1a1a1a";
+  if (style === "default") return "var(--primary-text-color,#fff)";
+  if (style === "wood") return "#f5e6c8";
+  return "#1a1a1a";
 }
 function fgColorMuted(style) {
-  return style === "default" ? "var(--secondary-text-color,#aaa)" : "#4a4a4a";
+  if (style === "default") return "var(--secondary-text-color,#aaa)";
+  if (style === "wood") return "#d8c39d";
+  return "#4a4a4a";
 }
 function trackColor(style) {
-  return style === "default" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.18)";
+  if (style === "default") return "rgba(255,255,255,0.15)";
+  if (style === "wood") return "rgba(0,0,0,0.35)";
+  return "rgba(0,0,0,0.18)";
 }
 function controlBackground(style, color) {
   if (style === "metallic") {
     return `linear-gradient(135deg, ${color} 0%, #fff 8%, ${color} 40%, #000 105%)`;
+  }
+  if (style === "wood") {
+    return `linear-gradient(${color}66, ${color}66), ${WOOD_BG}`;
   }
   return color;
 }
 function controlBorder(style) {
   if (style === "metallic") return "1px solid rgba(255,255,255,0.6)";
   if (style === "mondrian") return "4px solid #111";
+  if (style === "wood") return WOOD_BORDER;
   return "none";
 }
 function controlRadius(style) {
@@ -3384,4 +3579,248 @@ const frameDef = {
   }
 };
 registry.register(frameDef);
+const slideToggleDef = {
+  type: "slide-toggle",
+  label: "Schiebeschalter",
+  icon: "mdi:toggle-switch-outline",
+  defaultSize: { width: 100, height: 44 },
+  defaultConfig: {
+    on_color: "#4caf50",
+    off_color: "#757575",
+    knob_color: "#ffffff"
+  },
+  configFields: [
+    {
+      key: "on_color",
+      label: "Farbe (An)",
+      type: "color",
+      default: "#4caf50"
+    },
+    {
+      key: "off_color",
+      label: "Farbe (Aus)",
+      type: "color",
+      default: "#757575"
+    },
+    {
+      key: "knob_color",
+      label: "Knopf-Farbe",
+      type: "color",
+      default: "#ffffff"
+    },
+    styleConfigField
+  ],
+  render(config, state, hass) {
+    const cfg = config.config;
+    const onColor = String(cfg.on_color ?? "#4caf50");
+    const offColor = String(cfg.off_color ?? "#757575");
+    const knobColor = String(cfg.knob_color ?? "#ffffff");
+    const style = getStyle(cfg);
+    const track = trackColor(style);
+    const isOn = state ? state.state === "on" || state.state === "true" : false;
+    const trackColorValue = isOn ? onColor : offColor;
+    const handleClick = (e2) => {
+      e2.stopPropagation();
+      if (!config.entity_id) return;
+      hass.callService("homeassistant", "toggle", {
+        entity_id: config.entity_id
+      });
+    };
+    return b`
+      <div
+        style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;"
+      >
+        <div
+          @click=${handleClick}
+          style="
+            position:relative;
+            width:90%;
+            height:70%;
+            max-height:36px;
+            border-radius:999px;
+            background:${trackColorValue};
+            box-shadow:inset 0 1px 3px rgba(0,0,0,0.4), 0 0 0 2px ${track};
+            cursor:pointer;
+            transition:background 0.2s;
+          "
+        >
+          <div
+            style="
+              position:absolute;
+              top:2px;
+              bottom:2px;
+              width:calc(50% - 2px);
+              left:${isOn ? "calc(50% + 0px)" : "2px"};
+              border-radius:999px;
+              background:${knobColor};
+              box-shadow:0 1px 3px rgba(0,0,0,0.5);
+              transition:left 0.18s ease;
+            "
+          ></div>
+        </div>
+      </div>
+    `;
+  }
+};
+registry.register(slideToggleDef);
+function formatValue(value, step) {
+  const decimals = step.toString().includes(".") ? step.toString().split(".")[1].length : 0;
+  return value.toFixed(decimals);
+}
+const valueSliderDef = {
+  type: "value-slider",
+  label: "Regler",
+  icon: "mdi:tune-variant",
+  defaultSize: { width: 70, height: 200 },
+  defaultConfig: {
+    label: "",
+    min: 0,
+    max: 100,
+    step: 1,
+    unit: "",
+    orientation: "vertical",
+    color: "#03a9f4",
+    service_domain: "input_number",
+    service_name: "set_value",
+    value_param: "value"
+  },
+  configFields: [
+    { key: "label", label: "Label", type: "text", default: "" },
+    { key: "min", label: "Min", type: "number", default: 0 },
+    { key: "max", label: "Max", type: "number", default: 100 },
+    { key: "step", label: "Step", type: "number", default: 1 },
+    { key: "unit", label: "Unit", type: "text", default: "" },
+    {
+      key: "orientation",
+      label: "Orientation",
+      type: "select",
+      options: [
+        { value: "vertical", label: "Vertical" },
+        { value: "horizontal", label: "Horizontal" }
+      ],
+      default: "vertical"
+    },
+    { key: "color", label: "Color", type: "color", default: "#03a9f4" },
+    {
+      key: "service_domain",
+      label: "Service Domain",
+      type: "text",
+      default: "input_number"
+    },
+    {
+      key: "service_name",
+      label: "Service Name",
+      type: "text",
+      default: "set_value"
+    },
+    {
+      key: "value_param",
+      label: "Value Parameter",
+      type: "text",
+      default: "value"
+    },
+    styleConfigField
+  ],
+  render(config, state, hass) {
+    const cfg = config.config;
+    const label = String(cfg.label ?? "");
+    const min = Number(cfg.min ?? 0);
+    const max = Number(cfg.max ?? 100);
+    const step = Number(cfg.step ?? 1) || 1;
+    const unit = String(cfg.unit ?? "");
+    const orientation = cfg.orientation === "horizontal" ? "horizontal" : "vertical";
+    const color = String(cfg.color ?? "#03a9f4");
+    const domain = String(cfg.service_domain ?? "input_number");
+    const service = String(cfg.service_name ?? "set_value");
+    const valueParam = String(cfg.value_param ?? "value");
+    const style = getStyle(cfg);
+    const fg = fgColor(style);
+    const fgMuted = fgColorMuted(style);
+    const track = trackColor(style);
+    const raw = state ? parseFloat(state.state) : NaN;
+    const value = isNaN(raw) ? min : Math.min(max, Math.max(min, raw));
+    const pct = max > min ? (value - min) / (max - min) : 0;
+    const applyPct = (trackEl, fillEl, textEl, p2) => {
+      const clamped = Math.min(1, Math.max(0, p2));
+      const rawValue = min + clamped * (max - min);
+      const stepped = Math.round(rawValue / step) * step;
+      const finalValue = Math.min(max, Math.max(min, stepped));
+      const finalPct = max > min ? (finalValue - min) / (max - min) : 0;
+      if (orientation === "vertical") {
+        fillEl.style.height = `${finalPct * 100}%`;
+      } else {
+        fillEl.style.width = `${finalPct * 100}%`;
+      }
+      textEl.textContent = `${formatValue(finalValue, step)}${unit}`;
+      return finalValue;
+    };
+    const handlePointerDown = (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      if (!config.entity_id) return;
+      const trackEl = e2.currentTarget;
+      const fillEl = trackEl.querySelector(".vs-fill");
+      const textEl = trackEl.querySelector(".vs-value");
+      trackEl.setPointerCapture(e2.pointerId);
+      const pctFromEvent = (ev) => {
+        const rect = trackEl.getBoundingClientRect();
+        if (orientation === "vertical") {
+          return 1 - (ev.clientY - rect.top) / rect.height;
+        }
+        return (ev.clientX - rect.left) / rect.width;
+      };
+      let finalValue = applyPct(trackEl, fillEl, textEl, pctFromEvent(e2));
+      const onMove = (ev) => {
+        finalValue = applyPct(trackEl, fillEl, textEl, pctFromEvent(ev));
+      };
+      const onUp = () => {
+        trackEl.removeEventListener("pointermove", onMove);
+        trackEl.removeEventListener("pointerup", onUp);
+        trackEl.removeEventListener("pointercancel", onUp);
+        hass.callService(domain, service, {
+          entity_id: config.entity_id,
+          [valueParam]: finalValue
+        });
+      };
+      trackEl.addEventListener("pointermove", onMove);
+      trackEl.addEventListener("pointerup", onUp, { once: true });
+      trackEl.addEventListener("pointercancel", onUp, { once: true });
+    };
+    const fillStyle = orientation === "vertical" ? `position:absolute;left:0;right:0;bottom:0;height:${pct * 100}%;background:${color};` : `position:absolute;top:0;bottom:0;left:0;width:${pct * 100}%;background:${color};`;
+    return b`
+      <div
+        style="
+          width:100%;height:100%;
+          display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+          box-sizing:border-box;padding:8px;
+          color:${fg};
+          ${panelChromeCss(style, "value-slider")}
+        "
+      >
+        ${label ? b`<div style="font-size:11px;color:${fgMuted};">${label}</div>` : ""}
+        <div
+          class="vs-track"
+          @pointerdown=${handlePointerDown}
+          style="
+            position:relative;
+            flex:1;
+            width:${orientation === "vertical" ? "40%" : "100%"};
+            min-height:0;
+            border-radius:6px;
+            background:${track};
+            cursor:pointer;
+            touch-action:none;
+            overflow:hidden;
+          "
+        >
+          <div class="vs-fill" style=${fillStyle}></div>
+        </div>
+        <div class="vs-value" style="font-size:13px;font-weight:bold;color:${fg};">
+          ${formatValue(value, step)}${unit}
+        </div>
+      </div>
+    `;
+  }
+};
+registry.register(valueSliderDef);
 window.lit = { html: b, svg: w };

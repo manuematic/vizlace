@@ -9,6 +9,8 @@ import "./elements/toggle-button";
 import "./elements/color-field";
 import "./elements/heating";
 import "./elements/frame";
+import "./elements/slide-toggle";
+import "./elements/value-slider";
 
 // Re-exported so community plugins can use Lit templates without bundling
 // their own copy - see README "Community element API".

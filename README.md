@@ -5,9 +5,10 @@ A free-placement visual dashboard for Home Assistant — similar to ioBroker's V
 ## Features
 
 - **Free-placement canvas** — drag elements to any position, resize with handles
+- **Multi-select & grouping** — shift-click or drag a selection box to select multiple elements, group them to move as one unit, ungroup anytime
 - **Live data** — elements update in real time from HA entity states
-- **Built-in elements**: Gauge, Horizontal Gauge, Tricolor Gauge, Text Display, Button, Toggle Button, Color Field, Heating thermostat, Frame
-- **Element styles** — every element can be switched between Standard, Metallic, and Mondrian looks
+- **Built-in elements**: Gauge, Horizontal Gauge, Tricolor Gauge, Text Display, Button, Toggle Button, Slide Toggle, Value Slider, Color Field, Heating thermostat, Frame
+- **Element styles** — every element can be switched between Standard, Metallic, Mondrian, and Wood looks
 - **Searchable entity picker** — live filter by entity id or friendly name when linking an element
 - **Configurable grid** — adjust the snap grid spacing, or turn snapping off entirely
 - **Screen resolution guide** — enter a target screen size to see its bounds as an overlay on the canvas
@@ -58,6 +59,7 @@ The build output goes directly to `custom_components/vizlace/www/vizlace.js`.
    - Use the **left toolbar** to add elements to the canvas.
    - **Drag** elements to reposition them; use the **resize handles** to resize.
    - Click an element to select it — the **right inspector** shows its properties.
+   - **Shift-click** elements, or **drag a selection box** on empty canvas, to select multiple elements at once. Click **Group** in the inspector to move them together from then on; click **Ungroup** to release them. Clicking any member of a group selects the whole group again.
    - Set the **Entity ID** to link the element to a HA entity — start typing to search by entity id or friendly name and pick a match, or type a full id directly.
    - Configure element-specific options (color, label, range, etc.).
    - Click **Save** when done.
@@ -74,11 +76,13 @@ The build output goes directly to `custom_components/vizlace/www/vizlace.js`.
 | **Text Display** | Shows entity state as large text. Config: font size, color, prefix, unit. |
 | **Button** | Calls a HA service on click. Config: label, service domain/name/data, color. |
 | **Toggle Button** | Calls `homeassistant.toggle` on the linked entity; label and color switch between an on/off pair based on entity state. |
+| **Slide Toggle** | iOS/Android-style sliding switch — the knob position (not just color) shows on/off state. Calls `homeassistant.toggle`. Config: on/off/knob colors. |
+| **Value Slider** | Draggable fader for setting a numeric value between a min and max, gauge-style. Drag to set, release to call a configurable service (defaults to `input_number.set_value`). Config: min, max, step, unit, orientation, color, service domain/name/value parameter. |
 | **Color Field** | Colored rectangle driven by entity state. Mode `bw`: on/off → configurable colors. Mode `color`: entity state is used directly as CSS color. |
 | **Heating** | Thermostat control for `climate` entities. Shows current and set-point temperature, +/− buttons call `climate.set_temperature`. |
 | **Frame** | Border-only rectangle for visually grouping other elements. Config: border width (0–20px), border color. Transparent and click-through in view mode. |
 
-Every element (built-in or community) also gets a **Style** field — Standard, Metallic, or Mondrian — in its inspector. New looks are added centrally in `frontend/src/elements/styles.ts`.
+Every element (built-in or community) also gets a **Style** field — Standard, Metallic, Mondrian, or Wood — in its inspector. New looks are added centrally in `frontend/src/elements/styles.ts`.
 
 ## Plugin Manager (community elements, self-service)
 
@@ -156,6 +160,8 @@ frontend/src/                ← TypeScript frontend
   elements/color-field.ts      color rectangle
   elements/heating.ts          climate thermostat control
   elements/frame.ts            border-only grouping rectangle
+  elements/slide-toggle.ts     sliding on/off switch
+  elements/value-slider.ts     draggable value fader
   plugins/loader.ts            fetches installed plugins, dynamic-imports them as blob URLs
   plugins/manager.ts           admin UI: upload/list/delete plugins
   editor/canvas.ts             drag-and-drop editor canvas (pointer events)

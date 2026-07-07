@@ -97,11 +97,34 @@ export class VizlaceEditorInspector extends LitElement {
     .checkbox-row label {
       margin-bottom: 0;
     }
+    .btn-action {
+      width: 100%;
+      padding: 7px;
+      background: rgba(3, 169, 244, 0.15);
+      border: 1px solid rgba(3, 169, 244, 0.4);
+      border-radius: 4px;
+      color: var(--primary-color, #03a9f4);
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    .btn-action:hover {
+      background: rgba(3, 169, 244, 0.3);
+    }
+    .group-note {
+      font-size: 11px;
+      color: var(--secondary-text-color, #aaa);
+      margin-top: 8px;
+    }
   `;
 
-  @property({ attribute: false }) element: ElementConfig | null = null;
+  @property({ attribute: false }) elements: ElementConfig[] = [];
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) dashboard!: Dashboard;
+
+  private get element(): ElementConfig | null {
+    return this.elements.length === 1 ? this.elements[0] : null;
+  }
 
   private _patch(patch: Partial<ElementConfig>) {
     if (!this.element) return;
@@ -117,6 +140,32 @@ export class VizlaceEditorInspector extends LitElement {
   private _patchConfig(key: string, value: unknown) {
     if (!this.element) return;
     this._patch({ config: { ...this.element.config, [key]: value } });
+  }
+
+  private _group() {
+    this.dispatchEvent(
+      new CustomEvent("group-elements", {
+        detail: this.elements.map((e) => e.id),
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private _ungroup(ids?: string[]) {
+    this.dispatchEvent(
+      new CustomEvent("ungroup-elements", {
+        detail: ids ?? this.elements.map((e) => e.id),
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private _groupMemberIds(groupId: string): string[] {
+    return this.dashboard.elements
+      .filter((e) => e.groupId === groupId)
+      .map((e) => e.id);
   }
 
   private _patchDashboard(patch: Partial<Dashboard>) {
@@ -199,16 +248,63 @@ export class VizlaceEditorInspector extends LitElement {
     `;
   }
 
+  private _renderMultiSelection() {
+    const count = this.elements.length;
+    const groupIds = new Set(this.elements.map((e) => e.groupId));
+    const isExistingGroup =
+      groupIds.size === 1 && this.elements.every((e) => !!e.groupId);
+
+    return html`
+      <h3>${count} Elements Selected</h3>
+      <div class="empty">
+        Shift-click elements or drag a selection box on the canvas to adjust
+        the selection.
+      </div>
+
+      <hr class="separator" />
+
+      ${isExistingGroup
+        ? html`
+            <button class="btn-action" @click=${() => this._ungroup()}>
+              Ungroup
+            </button>
+          `
+        : html`
+            <button class="btn-action" @click=${this._group}>
+              Group (${count})
+            </button>
+          `}
+    `;
+  }
+
   render() {
-    if (!this.element) {
+    if (this.elements.length === 0) {
       return this._renderDashboardSettings();
     }
 
-    const el = this.element;
+    if (this.elements.length > 1) {
+      return this._renderMultiSelection();
+    }
+
+    const el = this.element!;
     const def = registry.get(el.type);
 
     return html`
       <h3>${def?.label ?? el.type}</h3>
+      ${el.groupId
+        ? html`
+            <div class="group-note">
+              Part of a group.
+              <button
+                class="btn-action"
+                @click=${() => this._ungroup(this._groupMemberIds(el.groupId!))}
+              >
+                Ungroup
+              </button>
+            </div>
+            <hr class="separator" />
+          `
+        : nothing}
 
       <!-- Position & size -->
       <label>Position & Size</label>

@@ -11,6 +11,7 @@ export interface ElementConfig {
   width: number;
   height: number;
   entity_id?: string;
+  groupId?: string;
   config: Record<string, unknown>;
 }
 

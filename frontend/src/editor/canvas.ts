@@ -16,11 +16,22 @@ type ResizeHandle =
   | null;
 
 interface DragState {
-  elementId: string;
   startX: number;
   startY: number;
-  origX: number;
-  origY: number;
+  origins: Record<string, { x: number; y: number }>;
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function rectsIntersect(a: Rect, b: Rect): boolean {
+  return (
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  );
 }
 
 interface ResizeState {
@@ -114,14 +125,24 @@ export class VizlaceEditorCanvas extends LitElement {
     .handle.s  { bottom: -5px; left: calc(50% - 5px); cursor: s-resize; }
     .handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
     .handle.w  { top: calc(50% - 5px); left: -5px; cursor: w-resize; }
+    .marquee {
+      position: absolute;
+      border: 1px dashed var(--primary-color, #03a9f4);
+      background: rgba(3, 169, 244, 0.15);
+      pointer-events: none;
+      z-index: 60;
+    }
   `;
 
   @property({ attribute: false }) dashboard!: Dashboard;
   @property({ attribute: false }) hass!: HomeAssistant;
-  @state() private selectedId: string | null = null;
+  @state() private selectedIds: string[] = [];
+  @state() private marqueeRect: Rect | null = null;
 
   private drag: DragState | null = null;
   private resize: ResizeState | null = null;
+  private marqueeStart: { x: number; y: number } | null = null;
+  private marqueeCanvasRect: DOMRect | null = null;
 
   connectedCallback() {
     super.connectedCallback();
@@ -141,23 +162,86 @@ export class VizlaceEditorCanvas extends LitElement {
     return Math.round(v / grid) * grid;
   }
 
+  private _setSelection(ids: string[]) {
+    this.selectedIds = ids;
+    const elements = ids
+      .map((id) => this.dashboard.elements.find((e) => e.id === id))
+      .filter((e): e is ElementConfig => !!e);
+    this.dispatchEvent(
+      new CustomEvent("selection-changed", { detail: elements, bubbles: true })
+    );
+  }
+
   private _onPointerDown(e: PointerEvent, el: ElementConfig) {
     if ((e.target as HTMLElement).classList.contains("handle")) return;
     e.preventDefault();
-    this.selectedId = el.id;
-    this.dispatchEvent(
-      new CustomEvent("element-selected", { detail: el, bubbles: true })
-    );
-    this.drag = {
-      elementId: el.id,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: el.x,
-      origY: el.y,
-    };
+    e.stopPropagation();
+
+    if (e.shiftKey) {
+      const set = new Set(this.selectedIds);
+      if (set.has(el.id)) set.delete(el.id);
+      else set.add(el.id);
+      this._setSelection([...set]);
+      return;
+    }
+
+    if (!this.selectedIds.includes(el.id)) {
+      const ids = el.groupId
+        ? this.dashboard.elements
+            .filter((e2) => e2.groupId === el.groupId)
+            .map((e2) => e2.id)
+        : [el.id];
+      this._setSelection(ids);
+    }
+
+    const origins: Record<string, { x: number; y: number }> = {};
+    for (const id of this.selectedIds) {
+      const e2 = this.dashboard.elements.find((x) => x.id === id);
+      if (e2) origins[id] = { x: e2.x, y: e2.y };
+    }
+    this.drag = { startX: e.clientX, startY: e.clientY, origins };
     window.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("pointerup", this._onPointerUp, { once: true });
   }
+
+  private _onCanvasPointerDown(e: PointerEvent) {
+    if (e.target !== e.currentTarget) return;
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    this.marqueeCanvasRect = rect;
+    this.marqueeStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    window.addEventListener("pointermove", this._onMarqueeMove);
+    window.addEventListener("pointerup", this._onMarqueeUp, { once: true });
+  }
+
+  private _onMarqueeMove = (e: PointerEvent) => {
+    if (!this.marqueeStart || !this.marqueeCanvasRect) return;
+    const curX = e.clientX - this.marqueeCanvasRect.left;
+    const curY = e.clientY - this.marqueeCanvasRect.top;
+    const x = Math.min(this.marqueeStart.x, curX);
+    const y = Math.min(this.marqueeStart.y, curY);
+    const w = Math.abs(curX - this.marqueeStart.x);
+    const h = Math.abs(curY - this.marqueeStart.y);
+    this.marqueeRect = { x, y, w, h };
+  };
+
+  private _onMarqueeUp = () => {
+    window.removeEventListener("pointermove", this._onMarqueeMove);
+    const rect = this.marqueeRect;
+    this.marqueeRect = null;
+    this.marqueeStart = null;
+    this.marqueeCanvasRect = null;
+    if (rect && (rect.w > 4 || rect.h > 4)) {
+      const ids = this.dashboard.elements
+        .filter((el) =>
+          rectsIntersect(rect, { x: el.x, y: el.y, w: el.width, h: el.height })
+        )
+        .map((el) => el.id);
+      this._setSelection(ids);
+    } else {
+      this._setSelection([]);
+    }
+  };
 
   private _onResizeHandleDown(
     e: PointerEvent,
@@ -182,12 +266,21 @@ export class VizlaceEditorCanvas extends LitElement {
 
   private _onPointerMove = (e: PointerEvent) => {
     if (this.drag) {
-      const dx = e.clientX - this.drag.startX;
-      const dy = e.clientY - this.drag.startY;
-      this._updateElement(this.drag.elementId, {
-        x: this._snap(Math.max(0, this.drag.origX + dx)),
-        y: this._snap(Math.max(0, this.drag.origY + dy)),
-      });
+      const origins = Object.values(this.drag.origins);
+      let dx = e.clientX - this.drag.startX;
+      let dy = e.clientY - this.drag.startY;
+      const minOrigX = Math.min(...origins.map((o) => o.x));
+      const minOrigY = Math.min(...origins.map((o) => o.y));
+      dx = Math.max(dx, -minOrigX);
+      dy = Math.max(dy, -minOrigY);
+      const patches: Record<string, Partial<ElementConfig>> = {};
+      for (const [id, origin] of Object.entries(this.drag.origins)) {
+        patches[id] = {
+          x: this._snap(origin.x + dx),
+          y: this._snap(origin.y + dy),
+        };
+      }
+      this._updateElements(patches);
     } else if (this.resize) {
       const r = this.resize;
       const dx = e.clientX - r.startX;
@@ -216,12 +309,9 @@ export class VizlaceEditorCanvas extends LitElement {
 
   private _onPointerUp = () => {
     if (this.drag) {
-      const el = this.dashboard.elements.find((e) => e.id === this.drag!.elementId);
-      if (el) {
-        this.dispatchEvent(
-          new CustomEvent("element-moved", { detail: el, bubbles: true })
-        );
-      }
+      this.dispatchEvent(
+        new CustomEvent("element-moved", { bubbles: true })
+      );
     }
     if (this.resize) {
       const el = this.dashboard.elements.find(
@@ -239,20 +329,15 @@ export class VizlaceEditorCanvas extends LitElement {
   };
 
   private _updateElement(id: string, patch: Partial<ElementConfig>) {
+    this._updateElements({ [id]: patch });
+  }
+
+  private _updateElements(patches: Record<string, Partial<ElementConfig>>) {
     const elements = this.dashboard.elements.map((el) =>
-      el.id === id ? { ...el, ...patch } : el
+      patches[el.id] ? { ...el, ...patches[el.id] } : el
     );
     this.dashboard = { ...this.dashboard, elements };
     this.requestUpdate();
-  }
-
-  private _onCanvasClick(e: MouseEvent) {
-    if (e.target === e.currentTarget) {
-      this.selectedId = null;
-      this.dispatchEvent(
-        new CustomEvent("element-selected", { detail: null, bubbles: true })
-      );
-    }
   }
 
   private _renderHandles(el: ElementConfig) {
@@ -293,8 +378,21 @@ export class VizlaceEditorCanvas extends LitElement {
           minHeight: `${canvasHeight}px`,
           backgroundSize: `${gridSize}px ${gridSize}px`,
         })}
-        @click=${this._onCanvasClick}
+        @pointerdown=${this._onCanvasPointerDown}
       >
+        ${this.marqueeRect
+          ? html`
+              <div
+                class="marquee"
+                style=${styleMap({
+                  left: `${this.marqueeRect.x}px`,
+                  top: `${this.marqueeRect.y}px`,
+                  width: `${this.marqueeRect.w}px`,
+                  height: `${this.marqueeRect.h}px`,
+                })}
+              ></div>
+            `
+          : nothing}
         ${screenW && screenH
           ? html`
               <div
@@ -310,7 +408,7 @@ export class VizlaceEditorCanvas extends LitElement {
           : nothing}
         ${this.dashboard.elements.map((el) => {
           const def = registry.get(el.type);
-          const selected = el.id === this.selectedId;
+          const selected = this.selectedIds.includes(el.id);
           const entityState = el.entity_id
             ? this.hass?.states[el.entity_id] ?? null
             : null;
@@ -342,7 +440,9 @@ export class VizlaceEditorCanvas extends LitElement {
                       Unknown: ${el.type}
                     </div>`}
               </div>
-              ${selected ? this._renderHandles(el) : nothing}
+              ${selected && this.selectedIds.length === 1
+                ? this._renderHandles(el)
+                : nothing}
             </div>
           `;
         })}
@@ -359,22 +459,15 @@ export class VizlaceEditorCanvas extends LitElement {
       ...this.dashboard,
       elements: [...this.dashboard.elements, el],
     };
-    this.selectedId = el.id;
-    this.dispatchEvent(
-      new CustomEvent("element-selected", { detail: el, bubbles: true })
-    );
+    this._setSelection([el.id]);
     this.requestUpdate();
   }
 
   updateSelectedElement(patch: Partial<ElementConfig>) {
-    if (!this.selectedId) return;
-    this._updateElement(this.selectedId, patch);
-    const el = this.dashboard.elements.find((e) => e.id === this.selectedId);
-    if (el) {
-      this.dispatchEvent(
-        new CustomEvent("element-selected", { detail: el, bubbles: true })
-      );
-    }
+    if (this.selectedIds.length !== 1) return;
+    const id = this.selectedIds[0];
+    this._updateElement(id, patch);
+    this._setSelection([id]);
   }
 
   deleteElement(id: string) {
@@ -382,8 +475,26 @@ export class VizlaceEditorCanvas extends LitElement {
       ...this.dashboard,
       elements: this.dashboard.elements.filter((e) => e.id !== id),
     };
-    if (this.selectedId === id) this.selectedId = null;
+    if (this.selectedIds.includes(id)) {
+      this._setSelection(this.selectedIds.filter((x) => x !== id));
+    }
     this.requestUpdate();
+  }
+
+  groupElements(ids: string[]) {
+    if (ids.length < 2) return;
+    const groupId = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const patches: Record<string, Partial<ElementConfig>> = {};
+    for (const id of ids) patches[id] = { groupId };
+    this._updateElements(patches);
+    this._setSelection(ids);
+  }
+
+  ungroupElements(ids: string[]) {
+    const patches: Record<string, Partial<ElementConfig>> = {};
+    for (const id of ids) patches[id] = { groupId: undefined };
+    this._updateElements(patches);
+    this._setSelection(ids);
   }
 }
 

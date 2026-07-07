@@ -73,7 +73,7 @@ export class VizlaceEditor extends LitElement {
   @property({ attribute: false }) dashboard!: Dashboard;
   @state() private saving = false;
   @state() private saveStatus = "";
-  @state() private selectedElement: ElementConfig | null = null;
+  @state() private selectedElements: ElementConfig[] = [];
   @query("vizlace-editor-canvas")
   private canvasEl!: VizlaceEditorCanvas;
 
@@ -120,19 +120,19 @@ export class VizlaceEditor extends LitElement {
     this._syncElements();
   }
 
-  private _onElementSelected(e: CustomEvent<ElementConfig | null>) {
-    this.selectedElement = e.detail;
+  private _onSelectionChanged(e: CustomEvent<ElementConfig[]>) {
+    this.selectedElements = e.detail;
   }
 
   private _onElementChange(e: CustomEvent<ElementConfig>) {
     this.canvasEl.updateSelectedElement(e.detail);
-    this.selectedElement = e.detail;
+    this.selectedElements = [e.detail];
     this._syncElements();
   }
 
   private _onElementDelete(e: CustomEvent<string>) {
     this.canvasEl.deleteElement(e.detail);
-    this.selectedElement = null;
+    this.selectedElements = [];
     this._syncElements();
   }
 
@@ -141,6 +141,16 @@ export class VizlaceEditor extends LitElement {
   }
 
   private _onElementResized() {
+    this._syncElements();
+  }
+
+  private _onGroupElements(e: CustomEvent<string[]>) {
+    this.canvasEl.groupElements(e.detail);
+    this._syncElements();
+  }
+
+  private _onUngroupElements(e: CustomEvent<string[]>) {
+    this.canvasEl.ungroupElements(e.detail);
     this._syncElements();
   }
 
@@ -188,12 +198,14 @@ export class VizlaceEditor extends LitElement {
       <div
         class="main"
         @add-element=${this._onAddElement}
-        @element-selected=${this._onElementSelected}
+        @selection-changed=${this._onSelectionChanged}
         @element-change=${this._onElementChange}
         @element-delete=${this._onElementDelete}
         @element-moved=${this._onElementMoved}
         @element-resized=${this._onElementResized}
         @dashboard-change=${this._onDashboardChange}
+        @group-elements=${this._onGroupElements}
+        @ungroup-elements=${this._onUngroupElements}
       >
         <vizlace-editor-toolbar></vizlace-editor-toolbar>
         <vizlace-editor-canvas
@@ -201,7 +213,7 @@ export class VizlaceEditor extends LitElement {
           .hass=${this.hass}
         ></vizlace-editor-canvas>
         <vizlace-editor-inspector
-          .element=${this.selectedElement}
+          .elements=${this.selectedElements}
           .hass=${this.hass}
           .dashboard=${this.dashboard}
         ></vizlace-editor-inspector>
